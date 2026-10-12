@@ -1,0 +1,91 @@
+{
+  "sistem": "DocuLog Workstation",
+  "olusturma_tarihi": "2026-10-10T06:44:56.518548",
+  "toplam_evrak": 1,
+  "irsaliyeler": [
+    {
+      "evrak_id": "d9412e74-32a4-4efc-aaee-b34635892997",
+      "dosya_adi": "ornek.jpg",
+      "durum": "tamamlandi",
+      "guven_skoru": 0.98,
+      "okunabilirlik": "net",
+      "irsaliye_no": "A 045129",
+      "irsaliye_tipi": "Sevk İrsaliyesi",
+      "duzenleme_tarihi": "14.10.2024",
+      "sevk_tarihi": "14.10.2024",
+      "sevk_saati": "11:45",
+      "gonderici": {
+        "unvan": "ANADOLU AMBALAJ VE END. URUN. SAN. TIC. A.S.",
+        "vkn": "0680459201",
+        "vergi_dairesi": "Tuzla V.D.",
+        "adres": "Orhanli Mah. Demokrasi Cad. No:44 Tuzla / ISTANBUL"
+      },
+      "alici": {
+        "unvan": "MARMARA LOJISTIK DEPOLAMA VE DAG. LTD. STI.",
+        "vkn": "6120938455",
+        "vergi_dairesi": "Cerkezkoy V.D.",
+        "teslim_adresi": "Velikoy OSB 3. Cad. No:12 Cerkezkoy / TEKIRDAG"
+      },
+      "nakliye": {
+        "tasiyici_unvan": "OZDOGAN NAKLIYAT VE AMBAR ISLETMECILIGI",
+        "plaka": "34 TRS 882",
+        "sofor_ad_soyad": "Mehmet Yilmaz",
+        "sofor_tc": "24981039482"
+      },
+      "kalemler": [
+        {
+          "sira_no": 1,
+          "mal_hizmet": "100x120 Ahsap Euro Palet (Isil Islemli)",
+          "miktar": 120.0,
+          "birim": "Adet",
+          "birim_fiyat": null,
+          "tutar": null,
+          "notlar": "Saglam, temiz"
+        },
+        {
+          "sira_no": 2,
+          "mal_hizmet": "Karton Koli 60x40x40 Cift Oluklu A+ Kalite",
+          "miktar": 450.0,
+          "birim": "Koli",
+          "birim_fiyat": null,
+          "tutar": null,
+          "notlar": "Parti: 2024-K09"
+        },
+        {
+          "sira_no": 3,
+          "mal_hizmet": "Endustriyel Strec Film 23 Mikron 50cm x 300m",
+          "miktar": 36.0,
+          "birim": "Rulo",
+          "birim_fiyat": null,
+          "tutar": null,
+          "notlar": "6 koli x 6 rulo"
+        },
+        {
+          "sira_no": 4,
+          "mal_hizmet": "Plastik Cember Seridi 12mm x 3000m Mavi",
+          "miktar": 8.0,
+          "birim": "Adet",
+          "birim_fiyat": null,
+          "tutar": null,
+          "notlar": "Standart makara"
+        }
+      ],
+      "toplam_miktar": 614.0,
+      "teslimat_notlari": "Teslim Eden Sofor: Mehmet Yilmaz (Imza) | MARMARA LOJISTIK AMBAR GIRIS - TESLIM ALINDI - EKSIKSIZ VE HASARSIZ - Tarih: 14.10.2024 Saat: 15:20 - Teslim Alan Sef: Ahmet K. (Imza)",
+      "alan_guvenlikleri": {
+        "irsaliye_no": 0.99,
+        "duzenleme_tarihi": 0.99,
+        "sevk_tarihi": 0.99,
+        "sevk_saati": 0.99,
+        "gonderici_unvan": 0.98,
+        "gonderici_vkn": 0.98,
+        "alici_unvan": 0.98,
+        "alici_vkn": 0.98,
+        "plaka": 0.99,
+        "sofor_ad_soyad": 0.99,
+        "sofor_tc": 0.99,
+        "kalemler": 0.98
+      }
+    }
+  ]
+}

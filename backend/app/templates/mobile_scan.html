@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#090d16">
+  <title>DocuLog Mobil Tarayıcı</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+    body {
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background-color: #0b0f19;
+      color: #f1f5f9;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 12px 14px;
+      padding-top: max(12px, env(safe-area-inset-top));
+      padding-bottom: max(16px, env(safe-area-inset-bottom));
+      overflow-x: hidden;
+    }
+
+    /* Üst Bar */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-bottom: 12px;
+      border-bottom: 1px solid #1e293b;
+      gap: 8px;
+    }
+    .logo-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+    .logo-icon {
+      width: 34px;
+      height: 34px;
+      background: #2563eb;
+      border-radius: 9px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+      shrink-0: 0;
+    }
+    .logo-icon svg {
+      width: 18px;
+      height: 18px;
+      stroke: #ffffff;
+      fill: none;
+      stroke-width: 2;
+    }
+    .logo-text {
+      min-width: 0;
+    }
+    .logo-text h1 {
+      font-size: 14px;
+      font-weight: 700;
+      color: #ffffff;
+      line-height: 1.2;
+      white-space: nowrap;
+    }
+    .logo-text span {
+      font-size: 10px;
+      color: #94a3b8;
+      display: block;
+      white-space: nowrap;
+    }
+    .connection-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      background: rgba(16, 185, 129, 0.12);
+      border: 1px solid rgba(16, 185, 129, 0.25);
+      color: #34d399;
+      font-size: 10px;
+      font-weight: 600;
+      padding: 3px 8px;
+      border-radius: 999px;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .connection-dot {
+      width: 6px;
+      height: 6px;
+      background: #10b981;
+      border-radius: 50%;
+      box-shadow: 0 0 6px #10b981;
+      animation: pulse 1.8s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.85); }
+    }
+
+    /* Ana İçerik */
+    .main-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      padding: 12px 0;
+      width: 100%;
+      max-width: 100%;
+    }
+
+    /* 1. Aşama: Vizör ve Kamera Alanı */
+    .capture-box {
+      width: 100%;
+      max-width: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      gap: 14px;
+    }
+
+    /* A4 Hizalama Vizörü */
+    .viewfinder-frame {
+      position: relative;
+      width: 100%;
+      max-width: 100%;
+      aspect-ratio: 1 / 1.15;
+      max-height: 48vh;
+      background: radial-gradient(circle at 50% 50%, rgba(30, 41, 59, 0.5), rgba(15, 23, 42, 0.8));
+      border: 1px dashed rgba(148, 163, 184, 0.25);
+      border-radius: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    /* Köşe Çerçeve İşaretçileri */
+    .vf-corner {
+      position: absolute;
+      width: 24px;
+      height: 24px;
+      border-color: #3b82f6;
+      border-style: solid;
+    }
+    .vf-tl { top: 10px; left: 10px; border-width: 3px 0 0 3px; border-top-left-radius: 8px; }
+    .vf-tr { top: 10px; right: 10px; border-width: 3px 3px 0 0; border-top-right-radius: 8px; }
+    .vf-bl { bottom: 10px; left: 10px; border-width: 0 0 3px 3px; border-bottom-left-radius: 8px; }
+    .vf-br { bottom: 10px; right: 10px; border-width: 0 3px 3px 0; border-bottom-right-radius: 8px; }
+
+    .vf-tag {
+      position: absolute;
+      top: 14px;
+      background: rgba(15, 23, 42, 0.7);
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      color: #94a3b8;
+      font-size: 10px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 6px;
+      letter-spacing: 0.5px;
+    }
+
+    .scan-circle-btn {
+      width: 110px;
+      height: 110px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 30% 30%, #3b82f6, #1d4ed8);
+      border: 4px solid rgba(255, 255, 255, 0.25);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      box-shadow: 0 8px 24px rgba(29, 78, 216, 0.5), inset 0 2px 4px rgba(255, 255, 255, 0.3);
+      cursor: pointer;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+      touch-action: manipulation;
+    }
+    .scan-circle-btn:active {
+      transform: scale(0.93);
+      box-shadow: 0 4px 12px rgba(29, 78, 216, 0.7);
+    }
+    .scan-circle-btn svg {
+      width: 38px;
+      height: 38px;
+      stroke: #ffffff;
+      fill: none;
+      stroke-width: 1.8;
+      margin-bottom: 2px;
+    }
+    .scan-circle-btn span {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+
+    .instructions {
+      background: #131b2e;
+      border: 1px solid #1e293b;
+      border-radius: 12px;
+      padding: 12px 14px;
+      width: 100%;
+    }
+    .instructions p {
+      font-size: 12px;
+      color: #94a3b8;
+      line-height: 1.4;
+    }
+    .instructions strong {
+      color: #e2e8f0;
+    }
+
+    /* 2. Aşama: Önizleme & Çok Sayfalı Liste */
+    .preview-box {
+      width: 100%;
+      max-width: 360px;
+      display: none;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .preview-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 12px;
+      color: #94a3b8;
+    }
+    .preview-header strong {
+      color: #ffffff;
+    }
+    .pages-slider {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+      scroll-snap-type: x mandatory;
+    }
+    .page-thumb-card {
+      position: relative;
+      flex: 0 0 100%;
+      max-height: 46vh;
+      background: #0f172a;
+      border-radius: 14px;
+      overflow: hidden;
+      border: 1px solid #334155;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      scroll-snap-align: center;
+    }
+    .page-thumb-card img {
+      width: 100%;
+      max-height: 46vh;
+      object-fit: contain;
+      display: block;
+    }
+    .page-badge-pill {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: rgba(15, 23, 42, 0.85);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: #f1f5f9;
+      font-size: 10px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 6px;
+    }
+
+    .btn-add-page {
+      width: 100%;
+      padding: 10px;
+      border-radius: 10px;
+      background: #1e293b;
+      border: 1px dashed #475569;
+      color: #93c5fd;
+      font-size: 12px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      cursor: pointer;
+    }
+    .btn-add-page:active {
+      background: #334155;
+    }
+
+    .action-buttons {
+      display: flex;
+      gap: 8px;
+      width: 100%;
+    }
+    .btn {
+      flex: 1;
+      padding: 13px 16px;
+      border-radius: 12px;
+      font-size: 13px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      border: none;
+      cursor: pointer;
+      touch-action: manipulation;
+      transition: all 0.15s ease;
+    }
+    .btn-reset {
+      background: #1e293b;
+      color: #cbd5e1;
+      border: 1px solid #334155;
+      flex: 0.6;
+    }
+    .btn-reset:active {
+      background: #334155;
+    }
+    .btn-submit {
+      background: #059669;
+      color: #ffffff;
+      box-shadow: 0 4px 14px rgba(5, 150, 105, 0.4);
+      flex: 1.4;
+    }
+    .btn-submit:active {
+      background: #047857;
+      transform: scale(0.98);
+    }
+    .btn-submit:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    /* 3. Aşama: Başarılı */
+    .success-box {
+      width: 100%;
+      max-width: 360px;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      gap: 16px;
+    }
+    .success-icon-wrap {
+      width: 76px;
+      height: 76px;
+      border-radius: 50%;
+      background: rgba(16, 185, 129, 0.15);
+      border: 2px solid #10b981;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 25px rgba(16, 185, 129, 0.3);
+      animation: popIn 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+    @keyframes popIn {
+      0% { transform: scale(0.6); opacity: 0; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    .success-icon-wrap svg {
+      width: 38px;
+      height: 38px;
+      stroke: #10b981;
+      stroke-width: 2.2;
+      fill: none;
+    }
+    .success-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: #ffffff;
+    }
+    .success-desc {
+      font-size: 13px;
+      color: #94a3b8;
+      line-height: 1.4;
+    }
+    .btn-new-scan {
+      background: #2563eb;
+      color: white;
+      width: 100%;
+      padding: 13px;
+      border-radius: 12px;
+      font-size: 13px;
+      font-weight: 600;
+      border: none;
+      cursor: pointer;
+      box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35);
+    }
+    .btn-new-scan:active {
+      transform: scale(0.98);
+      background: #1d4ed8;
+    }
+
+    /* Alt Bilgi */
+    .footer {
+      font-size: 10px;
+      color: #64748b;
+      text-align: center;
+      border-top: 1px solid #1e293b;
+      padding-top: 10px;
+    }
+
+    /* Spinner */
+    .spinner {
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-top-color: #ffffff;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Üst Bar -->
+  <header class="header">
+    <div class="logo-group">
+      <div class="logo-icon">
+        <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+      </div>
+      <div class="logo-text">
+        <h1>DocuLog Mobil</h1>
+        <span>Canlı İrsaliye Köprüsü</span>
+      </div>
+    </div>
+    <div class="connection-badge">
+      <div class="connection-dot"></div>
+      <span>Bağlı</span>
+    </div>
+  </header>
+
+  <!-- Ana İçerik -->
+  <main class="main-content">
+    
+    <!-- 1. Aşama: Vizör ve Kamera Alanı -->
+    <section id="captureSection" class="capture-box">
+      <div class="viewfinder-frame">
+        <div class="vf-corner vf-tl"></div>
+        <div class="vf-corner vf-tr"></div>
+        <div class="vf-corner vf-bl"></div>
+        <div class="vf-corner vf-br"></div>
+        
+        <div class="vf-tag">A4 İRSALİYE VİZÖRÜ</div>
+
+        <button id="cameraBtn" class="scan-circle-btn" type="button">
+          <svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
+          <span>Fotoğraf Çek</span>
+        </button>
+      </div>
+
+      <div class="instructions">
+        <p>İrsaliyenin köşelerini vizöre hizalayın. <strong>Dik ve aydınlık</strong> ortamda çekin.</p>
+      </div>
+
+      <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display:none">
+    </section>
+
+    <!-- 2. Aşama: Çok Sayfalı Önizleme & Onay -->
+    <section id="previewSection" class="preview-box">
+      <div class="preview-header">
+        <span>Çekilen Sayfalar: <strong id="pageCountLabel">1 Sayfa</strong></span>
+        <span style="font-size:10px;color:#64748b">Kaydırarak inceleyin</span>
+      </div>
+
+      <div id="pagesSlider" class="pages-slider">
+        <!-- Dinamik sayfalar buraya eklenir -->
+      </div>
+
+      <button id="addPageBtn" class="btn-add-page" type="button">
+        <svg style="width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+        <span>+ İrsaliyenin 2. Sayfasını Ekle</span>
+      </button>
+
+      <div class="action-buttons">
+        <button id="resetBtn" class="btn btn-reset" type="button">
+          <span>Sıfırla</span>
+        </button>
+        <button id="submitBtn" class="btn btn-submit" type="button">
+          <svg id="submitIcon" style="width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+          <div id="submitSpinner" class="spinner" style="display:none"></div>
+          <span id="submitText">Sisteme Aktar</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- 3. Aşama: Başarılı -->
+    <section id="successSection" class="success-box">
+      <div class="success-icon-wrap">
+        <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>
+      </div>
+
+      <h2 class="success-title">Başarıyla Yüklendi!</h2>
+      <p id="successDesc" class="success-desc">İrsaliye masaüstü ekranınıza anında aktarıldı ve işleme alındı.</p>
+
+      <button id="newScanBtn" class="btn-new-scan" type="button">
+        + Yeni İrsaliye Tara
+      </button>
+    </section>
+
+  </main>
+
+  <!-- Alt Bilgi -->
+  <footer class="footer">
+    <span>Oturum: <strong id="sessionDisplay">...</strong></span> • <span>DocuLog Workstation</span>
+  </footer>
+
+  <script>
+    (function() {
+      const urlParams = new URLSearchParams(window.location.search);
+      let sessionId = urlParams.get('session_id') || 'default-session';
+      document.getElementById('sessionDisplay').textContent = sessionId.substring(0, 10);
+
+      const cameraInput = document.getElementById('cameraInput');
+      const cameraBtn = document.getElementById('cameraBtn');
+      const addPageBtn = document.getElementById('addPageBtn');
+      const resetBtn = document.getElementById('resetBtn');
+      const submitBtn = document.getElementById('submitBtn');
+      const newScanBtn = document.getElementById('newScanBtn');
+
+      const captureSection = document.getElementById('captureSection');
+      const previewSection = document.getElementById('previewSection');
+      const successSection = document.getElementById('successSection');
+      const pagesSlider = document.getElementById('pagesSlider');
+      const pageCountLabel = document.getElementById('pageCountLabel');
+      const successDesc = document.getElementById('successDesc');
+
+      const submitIcon = document.getElementById('submitIcon');
+      const submitSpinner = document.getElementById('submitSpinner');
+      const submitText = document.getElementById('submitText');
+
+      let capturedFiles = [];
+
+      // Kamera aç
+      cameraBtn.addEventListener('click', () => {
+        cameraInput.click();
+      });
+
+      addPageBtn.addEventListener('click', () => {
+        cameraInput.click();
+      });
+
+      // Fotoğraf çekildiğinde
+      cameraInput.addEventListener('change', (e) => {
+        const files = e.target.files;
+        if (files && files.length > 0) {
+          const newFile = files[0];
+          capturedFiles.push(newFile);
+          cameraInput.value = '';
+          renderPreviewSlider();
+          showSection('preview');
+        }
+      });
+
+      function renderPreviewSlider() {
+        pagesSlider.innerHTML = '';
+        pageCountLabel.textContent = capturedFiles.length + ' Sayfa';
+        submitText.textContent = `Sisteme Aktar (${capturedFiles.length} Sayfa)`;
+
+        capturedFiles.forEach((file, index) => {
+          const card = document.createElement('div');
+          card.className = 'page-thumb-card';
+          
+          const img = document.createElement('img');
+          img.src = URL.createObjectURL(file);
+          img.alt = `Sayfa ${index + 1}`;
+
+          const badge = document.createElement('div');
+          badge.className = 'page-badge-pill';
+          badge.textContent = `Sayfa ${index + 1}`;
+
+          card.appendChild(badge);
+          card.appendChild(img);
+          pagesSlider.appendChild(card);
+        });
+
+        // Sayfa ekle butonunun metnini güncelle
+        addPageBtn.querySelector('span').textContent = `+ İrsaliyenin ${capturedFiles.length + 1}. Sayfasını Ekle`;
+      }
+
+      // Sıfırla
+      resetBtn.addEventListener('click', () => {
+        capturedFiles = [];
+        cameraInput.value = '';
+        showSection('capture');
+      });
+
+      // Yeni irsaliye çek
+      newScanBtn.addEventListener('click', () => {
+        capturedFiles = [];
+        cameraInput.value = '';
+        showSection('capture');
+      });
+
+      // Sisteme aktar
+      submitBtn.addEventListener('click', async () => {
+        if (capturedFiles.length === 0) return;
+
+        setUploadingState(true);
+
+        try {
+          const formData = new FormData();
+          formData.append('session_id', sessionId);
+          capturedFiles.forEach((file) => {
+            formData.append('files', file, file.name || 'sayfa.jpg');
+          });
+
+          const response = await fetch('/api/mobile-upload', {
+            method: 'POST',
+            body: formData,
+          });
+
+          if (!response.ok) {
+            throw new Error('Yükleme başarısız oldu: ' + response.statusText);
+          }
+
+          const result = await response.json();
+          
+          if (navigator.vibrate) {
+            navigator.vibrate([80, 50, 80]);
+          }
+
+          successDesc.textContent = `${capturedFiles.length} sayfalık irsaliye masaüstü ekranınıza anında aktarıldı ve işleme alındı.`;
+          showSection('success');
+        } catch (err) {
+          alert('Hata: Belge aktarılırken bir sorun oluştu. Lütfen tekrar deneyin.');
+          console.error(err);
+        } finally {
+          setUploadingState(false);
+        }
+      });
+
+      function showSection(name) {
+        captureSection.style.display = name === 'capture' ? 'flex' : 'none';
+        previewSection.style.display = name === 'preview' ? 'flex' : 'none';
+        successSection.style.display = name === 'success' ? 'flex' : 'none';
+      }
+
+      function setUploadingState(isUploading) {
+        submitBtn.disabled = isUploading;
+        submitSpinner.style.display = isUploading ? 'inline-block' : 'none';
+        submitIcon.style.display = isUploading ? 'none' : 'inline-block';
+        submitText.textContent = isUploading ? 'Aktarılıyor...' : `Sisteme Aktar (${capturedFiles.length} Sayfa)`;
+      }
+    })();
+  </script>
+</body>
+</html>
