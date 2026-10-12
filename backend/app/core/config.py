@@ -22,8 +22,8 @@ class Settings:
     # Dizin Yolları (Sınıf niteliği olarak tanımlı)
     WORKSPACE_DIR: Path = WORKSPACE_DIR
     BACKEND_DIR: Path = BACKEND_DIR
-    UPLOAD_DIR: Path = BACKEND_DIR / "uploads"
-    EXPORT_DIR: Path = BACKEND_DIR / "exports"
+    UPLOAD_DIR: Path = Path("/tmp/uploads") if os.getenv("VERCEL") else (BACKEND_DIR / "uploads")
+    EXPORT_DIR: Path = Path("/tmp/exports") if os.getenv("VERCEL") else (BACKEND_DIR / "exports")
 
     # Sunucu Ayarları
     HOST: str = os.getenv("HOST", "0.0.0.0")
@@ -46,8 +46,11 @@ class Settings:
     ]
 
     def __init__(self):
-        # Klasörleri otomatik oluştur
-        self.UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-        self.EXPORT_DIR.mkdir(parents=True, exist_ok=True)
+        # Klasörleri otomatik oluştur (Vercel /tmp uyumlu)
+        try:
+            self.UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+            self.EXPORT_DIR.mkdir(parents=True, exist_ok=True)
+        except Exception as e:
+            print(f"Dizin oluşturma uyarısı: {e}")
 
 settings = Settings()
