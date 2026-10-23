@@ -303,19 +303,31 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
           </div>
         </div>
 
-        {/* Aksiyon Butonları (Net Hiyerarşi) */}
+        {/* Aksiyon Butonları (Net Hiyerarşi & İrsaliye Dışı Güvenlik Kilidi) */}
         <div className="flex items-center space-x-2">
-          <button
-            type="button"
-            onClick={handleApproveAndNext}
-            disabled={isSaving}
-            className="flex-1 flex items-center justify-center space-x-1.5 bg-emerald-600 hover:bg-emerald-500 text-white py-2.5 px-3 min-h-[44px] rounded-xl text-xs font-bold shadow-lg shadow-emerald-600/20 truncate tactile-btn-emerald"
-            title="Verileri onayla ve bir sonraki irsaliyeye geç (Ctrl+Enter)"
-          >
-            <CheckCheck className="w-4 h-4 stroke-[2.5] shrink-0" />
-            <span className="truncate">Onayla & Sonraki</span>
-            <span className="text-[10px] text-emerald-200/80 font-mono hidden lg:inline">(Ctrl+↵)</span>
-          </button>
+          {isNonInvoice ? (
+            <button
+              type="button"
+              disabled
+              className="flex-1 flex items-center justify-center space-x-1.5 bg-rose-950/40 text-rose-300/80 border border-rose-500/30 py-2.5 px-3 min-h-[44px] rounded-xl text-xs font-semibold cursor-not-allowed truncate select-none"
+              title="Bu görsel sevk irsaliyesi niteliği taşımadığı için muhasebeye onaylanamaz."
+            >
+              <ShieldAlert className="w-4 h-4 text-rose-400 shrink-0" />
+              <span className="truncate">İrsaliye Dışı (Onay Kilitli)</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={handleApproveAndNext}
+              disabled={isSaving}
+              className="flex-1 flex items-center justify-center space-x-1.5 bg-emerald-600 hover:bg-emerald-500 text-white py-2.5 px-3 min-h-[44px] rounded-xl text-xs font-bold shadow-lg shadow-emerald-600/20 truncate tactile-btn-emerald"
+              title="Verileri onayla ve bir sonraki irsaliyeye geç (Ctrl+Enter)"
+            >
+              <CheckCheck className="w-4 h-4 stroke-[2.5] shrink-0" />
+              <span className="truncate">Onayla & Sonraki</span>
+              <span className="text-[10px] text-emerald-200/80 font-mono hidden lg:inline">(Ctrl+↵)</span>
+            </button>
+          )}
 
           <button
             type="button"

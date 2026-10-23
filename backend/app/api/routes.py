@@ -375,6 +375,16 @@ async def process_document(doc_id: str):
 
     return doc_repo.get_by_id(doc_id)
 
+BATCH_SEMAPHORE = asyncio.Semaphore(2)
+
+async def _run_batch_worker(doc_ids: List[str]):
+    """Toplu evrak işlemede API kota patlamasını (503/504) önleyen sıralı worker."""
+    loop = asyncio.get_event_loop()
+    for doc_id in doc_ids:
+        async with BATCH_SEMAPHORE:
+            await loop.run_in_executor(None, _run_ai_extraction, doc_id)
+            await asyncio.sleep(1.2)  # Kota nefes alma payı
+
 @router.post("/batch/process-all")
 async def process_all_documents(background_tasks: BackgroundTasks):
     docs = doc_repo.get_all()
@@ -382,14 +392,16 @@ async def process_all_documents(background_tasks: BackgroundTasks):
     for doc in to_process:
         doc.durum = ProcessingStatus.ISLENIYOR
         doc_repo.save(doc)
-        background_tasks.add_task(_run_ai_extraction, doc.id)
+    
     if to_process:
+        doc_ids = [d.id for d in to_process]
+        background_tasks.add_task(_run_batch_worker, doc_ids)
         await ws_manager.broadcast_all({
             "type": "DOCUMENTS_UPDATED",
             "action": "batch_process_started",
             "count": len(to_process)
         })
-    return {"mesaj": "Toplu işlem başlatıldı", "islenen_adet": len(to_process)}
+    return {"mesaj": "Toplu işlem kontrollü kuyrukla başlatıldı", "islenen_adet": len(to_process)}
 
 @router.post("/documents/{doc_id}/rotate", response_model=DocumentItem)
 async def rotate_document(doc_id: str, req: RotateRequest):

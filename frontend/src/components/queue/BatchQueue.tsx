@@ -39,6 +39,8 @@ export const BatchQueue: React.FC<BatchQueueProps> = ({
   onMergeDocuments,
   isUploading,
 }) => {
+  type QueueFilterMode = 'all' | 'invoices' | 'non_invoices';
+  const [filterMode, setFilterMode] = useState<QueueFilterMode>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [isDragOver, setIsDragOver] = useState(false);
   const [isSelectionMode, setIsSelectionMode] = useState(false);
@@ -55,8 +57,30 @@ export const BatchQueue: React.FC<BatchQueueProps> = ({
     onaylanan: 0,
   };
 
+  const isDocNonInvoice = (doc: DocumentItem) => {
+    return Boolean(
+      doc.veri && (
+        (typeof doc.veri.guven_skoru === 'number' && Number.isFinite(doc.veri.guven_skoru) && doc.veri.guven_skoru === 0) ||
+        (doc.veri.genel_notlar && doc.veri.genel_notlar.toLowerCase().includes('sevk irsaliyesi değildir')) ||
+        (!doc.veri.header?.irsaliye_no && !doc.veri.header?.gonderici_unvan && (!doc.veri.kalemler || doc.veri.kalemler.length === 0))
+      )
+    );
+  };
+
+  const invoiceCount = safeDocs.filter((d) => d.durum !== 'kuyrukta' && !isDocNonInvoice(d)).length;
+  const nonInvoiceCount = safeDocs.filter((d) => isDocNonInvoice(d)).length;
+
   const filteredDocs = safeDocs.filter((doc) => {
+    // 1. Kategori Filtresi
+    if (filterMode === 'invoices') {
+      if (isDocNonInvoice(doc)) return false;
+    } else if (filterMode === 'non_invoices') {
+      if (!isDocNonInvoice(doc)) return false;
+    }
+
+    // 2. Arama Filtresi
     const term = searchTerm.toLowerCase();
+    if (!term) return true;
     const fileNameMatch = (doc?.dosya_adi || '').toLowerCase().includes(term);
     const irsaliyeNoMatch = (doc?.veri?.header?.irsaliye_no || '').toLowerCase().includes(term);
     const unvanMatch =
@@ -202,15 +226,54 @@ export const BatchQueue: React.FC<BatchQueueProps> = ({
         )}
 
         {safeDocs.length > 3 && (
-          <div className="relative min-w-0">
-            <Search className="w-4 h-4 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              placeholder="Ara (dosya adı, irsaliye no, ünvan)..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-9 pr-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 min-h-[38px]"
-            />
+          <div className="space-y-1.5 min-w-0">
+            <div className="relative min-w-0">
+              <Search className="w-4 h-4 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="Ara (dosya adı, irsaliye no, ünvan)..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-9 pr-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 min-h-[38px]"
+              />
+            </div>
+
+            {/* Linear Segmented Filter Pills (Tümü / İrsaliye / Uyumsuz) */}
+            <div className="flex items-center gap-1 p-0.5 bg-slate-950/70 border border-slate-800/80 rounded-lg text-[10px] font-medium">
+              <button
+                type="button"
+                onClick={() => setFilterMode('all')}
+                className={`flex-1 py-1 px-1 rounded text-center transition-all ${
+                  filterMode === 'all'
+                    ? 'bg-slate-800 text-white font-semibold shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                Tümü ({safeDocs.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setFilterMode('invoices')}
+                className={`flex-1 py-1 px-1 rounded text-center transition-all ${
+                  filterMode === 'invoices'
+                    ? 'bg-blue-600/30 text-blue-300 font-semibold border border-blue-500/30'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                İrsaliye ({invoiceCount})
+              </button>
+              <button
+                type="button"
+                onClick={() => setFilterMode('non_invoices')}
+                className={`flex-1 py-1 px-1 rounded text-center transition-all ${
+                  filterMode === 'non_invoices'
+                    ? 'bg-rose-600/30 text-rose-300 font-semibold border border-rose-500/30'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                Uyumsuz ({nonInvoiceCount})
+              </button>
+            </div>
           </div>
         )}
       </div>

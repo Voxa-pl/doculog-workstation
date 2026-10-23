@@ -263,6 +263,39 @@ export const App: React.FC = () => {
     }
   };
 
+  const handleSelectPrevDoc = () => {
+    const currentIndex = documents.findIndex((d) => d.id === selectedDocId);
+    if (currentIndex > 0) {
+      setSelectedDocId(documents[currentIndex - 1].id);
+    }
+  };
+
+  // Linear / Vim Tarzı Klavye Kısayolları (J = Sonraki, K = Önceki Evrak)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Input veya textarea içindeyse kısayolları engelle
+      const target = e.target as HTMLElement;
+      if (
+        target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.isContentEditable
+      ) {
+        return;
+      }
+
+      if (e.key === 'j' || e.key === 'J') {
+        e.preventDefault();
+        handleSelectNextDoc();
+      } else if (e.key === 'k' || e.key === 'K') {
+        e.preventDefault();
+        handleSelectPrevDoc();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [documents, selectedDocId]);
+
   const handleExportBatchExcel = () => {
     window.open(documentApi.getBatchExcelUrl(), '_blank');
   };

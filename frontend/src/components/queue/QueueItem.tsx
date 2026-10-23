@@ -37,6 +37,14 @@ export const QueueItem: React.FC<QueueItemProps> = ({
   isChecked = false,
   onToggleCheck,
 }) => {
+  const isNonInvoice = Boolean(
+    doc.veri && (
+      (typeof doc.veri.guven_skoru === 'number' && Number.isFinite(doc.veri.guven_skoru) && doc.veri.guven_skoru === 0) ||
+      (doc.veri.genel_notlar && doc.veri.genel_notlar.toLowerCase().includes('sevk irsaliyesi değildir')) ||
+      (!doc.veri.header?.irsaliye_no && !doc.veri.header?.gonderici_unvan && (!doc.veri.kalemler || doc.veri.kalemler.length === 0))
+    )
+  );
+
   const getStatusBadge = (status: ProcessingStatus) => {
     switch (status) {
       case 'onaylandi':
@@ -47,6 +55,14 @@ export const QueueItem: React.FC<QueueItemProps> = ({
           </span>
         );
       case 'tamamlandi':
+        if (isNonInvoice) {
+          return (
+            <span className="flex items-center space-x-1 text-[10px] text-rose-300 bg-rose-500/15 border border-rose-500/30 px-1.5 py-0.5 rounded font-medium shrink-0 state-morph-badge">
+              <AlertCircle className="w-3 h-3 text-rose-400" />
+              <span>İrsaliye Dışı</span>
+            </span>
+          );
+        }
         return (
           <span className="flex items-center space-x-1 text-[10px] text-blue-400 bg-blue-500/10 border border-blue-500/20 px-1.5 py-0.5 rounded font-medium shrink-0 state-morph-badge state-verified-pop">
             <CheckCircle2 className="w-3 h-3 text-blue-400" />
@@ -89,14 +105,20 @@ export const QueueItem: React.FC<QueueItemProps> = ({
   return (
     <div
       onClick={onSelect}
-      className={`group relative p-2.5 rounded-lg border cursor-pointer select-none min-w-0 tactile-card ${
+      className={`group relative p-2.5 rounded-lg border cursor-pointer select-none min-w-0 tactile-card overflow-hidden ${
         isSelected
           ? 'bg-blue-950/40 border-blue-500 shadow-md ring-1 ring-blue-500/30'
           : isChecked
           ? 'bg-purple-950/30 border-purple-500/60'
+          : isNonInvoice
+          ? 'bg-rose-950/20 border-rose-500/30 hover:border-rose-500/50'
           : 'bg-slate-900/60 border-slate-800/80 hover:bg-slate-900 hover:border-slate-700'
       } ${doc.durum === 'isleniyor' ? 'state-processing' : ''}`}
     >
+      {/* Seçili Belge Sol Akrilik Şerit (Linear Craft Indicator) */}
+      {isSelected && (
+        <div className="absolute left-0 top-1.5 bottom-1.5 w-1 bg-blue-500 rounded-r shadow-[0_0_8px_rgba(59,130,246,0.8)] z-10" />
+      )}
       <div className="flex space-x-2.5 min-w-0">
         {/* Çoklu Seçim Checkbox */}
         {isSelectionMode && (
