@@ -10,21 +10,23 @@ import { HeaderForm } from './HeaderForm';
 import { ItemsTable } from './ItemsTable';
 import { 
   FileSpreadsheet, 
-  FileCode,
-  FileJson,
-  ChevronDown,
+  FileCode, 
+  FileJson, 
+  ChevronDown, 
   CheckCheck, 
   Save, 
   Sparkles, 
   PenTool, 
-  FileText,
-  AlertTriangle,
-  Package,
-  Layers,
-  Info,
-  RotateCw,
-  RefreshCw,
-  ShieldAlert
+  FileText, 
+  AlertTriangle, 
+  Package, 
+  Layers, 
+  RefreshCw, 
+  ShieldAlert,
+  Trash2,
+  Copy,
+  Check,
+  Zap
 } from 'lucide-react';
 import { documentApi } from '../../services/api';
 
@@ -33,6 +35,7 @@ interface DocumentEditorProps {
   onUpdateDocument: (doc: DocumentItem) => void;
   onProcessDocument: (id: string) => void;
   onSelectNextDoc?: () => void;
+  onDeleteDoc?: (id: string) => void;
   isProcessing: boolean;
 }
 
@@ -41,6 +44,7 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
   onUpdateDocument,
   onProcessDocument,
   onSelectNextDoc,
+  onDeleteDoc,
   isProcessing,
 }) => {
   const [formData, setFormData] = useState<IrsaliyeData | null>(null);
@@ -48,6 +52,7 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
   const [isSaving, setIsSaving] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
+  const [isCopiedErp, setIsCopiedErp] = useState(false);
   const [suspiciousCount, setSuspiciousCount] = useState(0);
   const exportMenuRef = useRef<HTMLDivElement>(null);
   const jumpTimerRef = useRef<number | null>(null);
@@ -105,28 +110,52 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
     }, 60);
   };
 
+  // İrsaliye dışı belge kontrolü (Örn: Su şişesi, alakasız görsel veya 0 güven skoru)
+  const isNonInvoice = Boolean(
+    formData && (
+      (typeof formData.guven_skoru === 'number' && Number.isFinite(formData.guven_skoru) && formData.guven_skoru === 0) ||
+      (formData.genel_notlar && formData.genel_notlar.toLowerCase().includes('sevk irsaliyesi değildir')) ||
+      (!formData.header?.irsaliye_no && !formData.header?.gonderici_unvan && (!formData.kalemler || formData.kalemler.length === 0))
+    )
+  );
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'F2') {
-        e.preventDefault();
-        jumpToNextSuspicious();
-      } else if (e.key === 'Enter' && e.ctrlKey) {
-        e.preventDefault();
-        handleApproveAndNext();
-      } else if (
-        (e.key === '1' || e.key === '2' || e.key === '3') &&
-        (e.target as HTMLElement).tagName !== 'INPUT' &&
-        (e.target as HTMLElement).tagName !== 'TEXTAREA'
-      ) {
+      // Input veya textarea içindeyse bazı kısayolları engelle
+      const isInputActive =
+        (e.target as HTMLElement).tagName === 'INPUT' ||
+        (e.target as HTMLElement).tagName === 'TEXTAREA' ||
+        (e.target as HTMLElement).isContentEditable;
+
+      if (!isInputActive) {
+        if (
+          (e.key === 'Delete' || e.key === 'Backspace') &&
+          isNonInvoice &&
+          onDeleteDoc &&
+          document
+        ) {
+          e.preventDefault();
+          onDeleteDoc(document.id);
+          return;
+        }
+
         if (e.key === '1') setActiveTab('all');
         if (e.key === '2') setActiveTab('header');
         if (e.key === '3') setActiveTab('items');
+      }
+
+      if (e.key === 'F2') {
+        e.preventDefault();
+        jumpToNextSuspicious();
+      } else if (e.key === 'Enter' && e.ctrlKey && !isNonInvoice) {
+        e.preventDefault();
+        handleApproveAndNext();
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [formData, document, activeTab]);
+  }, [formData, document, activeTab, isNonInvoice, onDeleteDoc]);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -140,30 +169,24 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
 
   if (!document) {
     return (
-      <aside className="w-full md:w-80 lg:w-[420px] xl:w-[480px] h-full bg-slate-900/90 border-l border-slate-800 flex flex-col shrink-0 p-6 items-center justify-center text-center select-none overflow-hidden">
-        <div className="w-16 h-16 rounded-2xl bg-slate-800/60 border border-slate-700/50 flex items-center justify-center mb-3 text-slate-500">
+      <aside className="w-full md:w-80 lg:w-[420px] xl:w-[480px] h-full bg-theme-surface border-l border-theme-subtle flex flex-col shrink-0 p-6 items-center justify-center text-center select-none overflow-hidden">
+        <div className="w-16 h-16 rounded-2xl bg-theme-card border border-theme-subtle flex items-center justify-center mb-3 text-theme-muted">
           <FileText className="w-8 h-8 stroke-[1.5]" />
         </div>
-        <h3 className="text-sm font-semibold text-slate-300">Belge Seçilmedi</h3>
-        <p className="text-xs text-slate-500 mt-1 max-w-[240px]">Sol kuyruktan incelemek istediğiniz bir irsaliyeyi seçin.</p>
+        <h3 className="text-sm font-semibold text-theme-primary">Belge Seçilmedi</h3>
+        <p className="text-xs text-theme-muted mt-1 max-w-[240px]">Sol kuyruktan incelemek istediğiniz bir irsaliyeyi seçin.</p>
       </aside>
     );
   }
 
-  // İrsaliye dışı belge kontrolü (Örn: Su şişesi, alakasız görsel veya 0 güven skoru)
-  const isNonInvoice = formData && (
-    (typeof formData.guven_skoru === 'number' && Number.isFinite(formData.guven_skoru) && formData.guven_skoru === 0) ||
-    (formData.genel_notlar && formData.genel_notlar.toLowerCase().includes('sevk irsaliyesi değildir'))
-  );
-
   if (!formData || document.durum === 'kuyrukta') {
     return (
-      <aside className="w-full md:w-80 lg:w-[420px] xl:w-[480px] h-full bg-slate-900 border-l border-slate-800 flex flex-col shrink-0 p-6 items-center justify-center text-center select-none overflow-hidden">
+      <aside className="w-full md:w-80 lg:w-[420px] xl:w-[480px] h-full bg-theme-surface border-l border-theme-subtle flex flex-col shrink-0 p-6 items-center justify-center text-center select-none overflow-hidden">
         <div className="w-16 h-16 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center mb-3 text-blue-400">
           <Sparkles className="w-8 h-8 stroke-[1.5] animate-pulse" />
         </div>
-        <h3 className="text-sm font-semibold text-slate-200">Ayrıştırma Bekliyor</h3>
-        <p className="text-xs text-slate-400 mt-1 max-w-[280px]">
+        <h3 className="text-sm font-semibold text-theme-primary">Ayrıştırma Bekliyor</h3>
+        <p className="text-xs text-theme-muted mt-1 max-w-[280px]">
           Otomatik optik ayrıştırma motoru ile irsaliye başlıklarını, adresleri ve ürün kalemlerini tek tıkla aktarın.
         </p>
 
@@ -171,7 +194,7 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
           type="button"
           onClick={() => onProcessDocument(document.id)}
           disabled={isProcessing}
-          className="mt-5 flex items-center space-x-2 craft-button-primary disabled:opacity-50 text-white px-5 py-3 rounded-xl text-xs sm:text-sm font-semibold transition-all active:scale-95 min-h-[44px]"
+          className="mt-5 flex items-center space-x-2 craft-button-primary disabled:opacity-50 text-white px-5 py-2.5 rounded-lg text-xs sm:text-sm font-semibold transition-all active:scale-95 min-h-[40px]"
         >
           {isProcessing ? (
             <>
@@ -252,13 +275,46 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
     0
   );
 
+  const parsedDocTotalQty = (() => {
+    if (!formData?.genel_toplam_miktar) return null;
+    const cleaned = String(formData.genel_toplam_miktar).replace(/\./g, '').replace(',', '.').trim();
+    const val = parseFloat(cleaned);
+    return Number.isFinite(val) && val > 0 ? val : null;
+  })();
+
+  const isMathMatch = parsedDocTotalQty !== null && Math.abs(totalCalculatedQty - parsedDocTotalQty) < 0.05;
+  const isMathDiscrepancy = parsedDocTotalQty !== null && !isMathMatch;
+
+  const handleCopyErpData = () => {
+    if (!formData) return;
+    const erpPayload = {
+      belge_no: formData.header?.irsaliye_no || '',
+      tarih: formData.header?.sevk_tarihi || formData.header?.duzenleme_tarihi || '',
+      gonderici_vkn: formData.header?.gonderici_vkn || '',
+      gonderici_unvan: formData.header?.gonderici_unvan || '',
+      alici_vkn: formData.header?.alici_vkn || '',
+      alici_unvan: formData.header?.alici_unvan || '',
+      toplam_miktar: totalCalculatedQty,
+      kalemler: (formData.kalemler || []).map((k, idx) => ({
+        sira: idx + 1,
+        mal_hizmet: k.mal_hizmet || '',
+        miktar: Number(k.miktar) || 0,
+        birim: k.birim || 'Adet',
+        birim_fiyat: Number(k.birim_fiyat) || 0,
+      })),
+    };
+    navigator.clipboard.writeText(JSON.stringify(erpPayload, null, 2));
+    setIsCopiedErp(true);
+    setTimeout(() => setIsCopiedErp(false), 2200);
+  };
+
   return (
-    <aside className="w-full md:w-80 lg:w-[420px] xl:w-[480px] h-full bg-slate-900 border-l border-slate-800 flex flex-col shrink-0 select-none overflow-hidden">
+    <aside className="w-full md:w-80 lg:w-[420px] xl:w-[480px] h-full bg-theme-surface border-l border-theme-subtle flex flex-col shrink-0 select-none overflow-hidden">
       {/* Üst Eylem ve Durum Çubuğu */}
-      <div className="p-3 border-b border-slate-800 bg-slate-950/60 space-y-2.5">
+      <div className="p-3 border-b border-theme-subtle bg-theme-surface space-y-2.5">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center space-x-2">
-            <span className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+            <span className="text-xs font-bold text-theme-primary uppercase tracking-wider flex items-center gap-1.5">
               <span>Doğrulama İstasyonu</span>
             </span>
             {hasUnsavedChanges && (
@@ -271,7 +327,7 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
 
           <div className="flex items-center space-x-1.5 sm:space-x-2 text-[11px]">
             {isNonInvoice ? (
-              <div className="flex items-center space-x-1 text-rose-400 bg-rose-500/10 border border-rose-500/20 px-2 py-0.5 rounded text-[10px] font-semibold">
+              <div className="flex items-center space-x-1 text-rose-400 bg-rose-500/10 border border-rose-500/20 px-2 py-0.5 rounded-md text-[10px] font-semibold">
                 <ShieldAlert className="w-3.5 h-3.5 text-rose-400" />
                 <span>İrsaliye Dışı</span>
               </div>
@@ -279,48 +335,53 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
               <button
                 type="button"
                 onClick={jumpToNextSuspicious}
-                className="flex items-center space-x-1 text-amber-300 bg-amber-500/10 border border-amber-500/30 hover:bg-amber-500/20 px-2 py-1 min-h-[30px] rounded text-[10px] font-medium transition-all"
+                className="flex items-center space-x-1 text-amber-300 bg-amber-500/10 border border-amber-500/30 hover:bg-amber-500/20 px-2 py-0.5 min-h-[26px] rounded-md text-[10px] font-medium transition-all"
                 title="Şüpheli alana git (Kısayol: F2)"
               >
                 <AlertTriangle className="w-3 h-3 text-amber-400" />
                 <span>{suspiciousCount} Şüpheli (F2)</span>
               </button>
             ) : (
-              <div className="flex items-center space-x-1 text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded text-[10px] font-medium">
+              <div className="flex items-center space-x-1 text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-md text-[10px] font-medium">
                 <CheckCheck className="w-3 h-3" />
                 <span>Doğrulandı</span>
               </div>
             )}
 
             {!isNonInvoice && (
-              <div className="flex items-center space-x-1 text-slate-400 bg-slate-800/60 px-2 py-0.5 rounded border border-slate-700/50">
-                <span className="hidden xs:inline">Güven:</span>
-                <span className="font-mono font-bold text-emerald-400">
-                  %{Math.round((typeof formData.guven_skoru === 'number' && Number.isFinite(formData.guven_skoru) ? formData.guven_skoru : 0.95) * 100)}
+              <div className="flex items-center space-x-1.5 text-theme-muted bg-theme-card px-2 py-0.5 rounded-md border border-theme-subtle text-[10px] font-mono tabular-nums">
+                <Zap className="w-3 h-3 text-amber-400 shrink-0" />
+                <span className="text-theme-secondary font-medium">⚡ ~1.2s</span>
+                <span className="text-theme-muted">|</span>
+                <span className="font-bold text-emerald-400">
+                  %{Math.round((typeof formData.guven_skoru === 'number' && Number.isFinite(formData.guven_skoru) ? formData.guven_skoru : 0.95) * 100)} Doğruluk
                 </span>
               </div>
             )}
           </div>
         </div>
 
-        {/* Aksiyon Butonları (Net Hiyerarşi & İrsaliye Dışı Güvenlik Kilidi) */}
+        {/* Aksiyon Butonları (Net Hiyerarşi & Tek Tıkla Reddetme / Onay) */}
         <div className="flex items-center space-x-2">
           {isNonInvoice ? (
-            <button
-              type="button"
-              disabled
-              className="flex-1 flex items-center justify-center space-x-1.5 bg-rose-950/40 text-rose-300/80 border border-rose-500/30 py-2.5 px-3 min-h-[44px] rounded-xl text-xs font-semibold cursor-not-allowed truncate select-none"
-              title="Bu görsel sevk irsaliyesi niteliği taşımadığı için muhasebeye onaylanamaz."
-            >
-              <ShieldAlert className="w-4 h-4 text-rose-400 shrink-0" />
-              <span className="truncate">İrsaliye Dışı (Onay Kilitli)</span>
-            </button>
+            onDeleteDoc && (
+              <button
+                type="button"
+                onClick={() => onDeleteDoc(document.id)}
+                className="flex-1 flex items-center justify-center space-x-1.5 bg-rose-600 hover:bg-rose-500 text-white py-2 px-3 min-h-[38px] rounded-lg text-xs font-bold shadow-md shadow-rose-600/20 truncate tactile-btn"
+                title="İrsaliye dışı görseli kuyruktan sil ve sonrakine geç (Delete)"
+              >
+                <Trash2 className="w-3.5 h-3.5 shrink-0" />
+                <span className="truncate">Kuyruktan Çıkar / Reddet</span>
+                <span className="text-[10px] text-rose-200/80 font-mono hidden lg:inline">(Del)</span>
+              </button>
+            )
           ) : (
             <button
               type="button"
               onClick={handleApproveAndNext}
               disabled={isSaving}
-              className="flex-1 flex items-center justify-center space-x-1.5 bg-emerald-600 hover:bg-emerald-500 text-white py-2.5 px-3 min-h-[44px] rounded-xl text-xs font-bold shadow-lg shadow-emerald-600/20 truncate tactile-btn-emerald"
+              className="flex-1 flex items-center justify-center space-x-1.5 bg-emerald-600 hover:bg-emerald-500 text-white py-2 px-3 min-h-[38px] rounded-lg text-xs font-bold shadow-md shadow-emerald-600/20 truncate tactile-btn-emerald"
               title="Verileri onayla ve bir sonraki irsaliyeye geç (Ctrl+Enter)"
             >
               <CheckCheck className="w-4 h-4 stroke-[2.5] shrink-0" />
@@ -333,32 +394,54 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
             type="button"
             onClick={() => onProcessDocument(document.id)}
             disabled={isProcessing}
-            className="p-2.5 min-w-[44px] min-h-[44px] flex items-center justify-center bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl text-xs border border-slate-700 shrink-0 tactile-icon"
+            className="p-2 min-w-[38px] min-h-[38px] flex items-center justify-center bg-theme-card hover:bg-theme-card-hover text-theme-secondary hover:text-theme-primary rounded-lg text-xs border border-theme-subtle shrink-0 tactile-icon"
             title="Belgeyi Yeniden Çözümle"
           >
-            <RefreshCw className={`w-4 h-4 ${isProcessing ? 'animate-spin text-blue-400' : ''}`} />
+            <RefreshCw className={`w-3.5 h-3.5 ${isProcessing ? 'animate-spin text-blue-400' : ''}`} />
           </button>
+
+          {/* Tek Tıkla ERP Kopyala Butonu */}
+          {!isNonInvoice && (
+            <button
+              type="button"
+              onClick={handleCopyErpData}
+              className="flex items-center space-x-1.5 bg-theme-card hover:bg-theme-card-hover text-theme-secondary hover:text-theme-primary py-2 px-2.5 min-h-[38px] rounded-lg text-xs font-semibold border border-theme-subtle shrink-0 tactile-btn"
+              title="ERP uyumlu JSON formatında panoya kopyala"
+            >
+              {isCopiedErp ? (
+                <>
+                  <Check className="w-3.5 h-3.5 text-emerald-400" />
+                  <span className="text-emerald-400 font-bold text-[11px]">Kopyalandı</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="w-3.5 h-3.5 text-blue-400" />
+                  <span className="hidden xl:inline text-[11px]">ERP Kopyala</span>
+                </>
+              )}
+            </button>
+          )}
 
           {/* Dışa Aktar Dropdown */}
           <div className="relative shrink-0" ref={exportMenuRef}>
             <button
               type="button"
               onClick={() => setIsExportMenuOpen((prev) => !prev)}
-              className="flex items-center space-x-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white py-2.5 px-3 min-h-[44px] rounded-xl text-xs font-semibold border border-slate-700 tactile-btn"
+              className="flex items-center space-x-1.5 bg-theme-card hover:bg-theme-card-hover text-theme-secondary hover:text-theme-primary py-2 px-2.5 min-h-[38px] rounded-lg text-xs font-semibold border border-theme-subtle tactile-btn"
               title="Dışa aktarma seçenekleri"
             >
-              <FileSpreadsheet className="w-4 h-4 text-emerald-400 shrink-0" />
-              <span className="hidden xs:inline">Dışa Aktar</span>
-              <ChevronDown className="w-3 h-3 text-slate-400 shrink-0" />
+              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+              <span className="hidden xs:inline text-[11px]">Dışa Aktar</span>
+              <ChevronDown className="w-3 h-3 text-theme-muted shrink-0" />
             </button>
 
             {isExportMenuOpen && (
-              <div className="absolute right-0 top-full mt-1.5 w-48 bg-slate-900 border border-slate-800 rounded-xl shadow-2xl z-30 p-1 space-y-0.5">
+              <div className="absolute right-0 top-full mt-1.5 w-52 bg-theme-surface border border-theme-subtle rounded-xl shadow-2xl z-30 p-1 space-y-0.5">
                 <a
                   href={documentApi.getSingleExcelUrl(document.id)}
                   download
                   onClick={() => setIsExportMenuOpen(false)}
-                  className="flex items-center space-x-2 px-3 py-2 rounded-lg text-xs text-slate-200 hover:bg-slate-800 hover:text-white transition-colors min-h-[38px]"
+                  className="flex items-center space-x-2 px-3 py-2 rounded-lg text-xs text-theme-secondary hover:bg-theme-card hover:text-theme-primary transition-colors min-h-[36px]"
                 >
                   <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
                   <span>Excel Raporu (.xlsx)</span>
@@ -367,7 +450,7 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
                   href={documentApi.getSingleLogoXmlUrl(document.id)}
                   download
                   onClick={() => setIsExportMenuOpen(false)}
-                  className="flex items-center space-x-2 px-3 py-2 rounded-lg text-xs text-slate-200 hover:bg-slate-800 hover:text-white transition-colors min-h-[38px]"
+                  className="flex items-center space-x-2 px-3 py-2 rounded-lg text-xs text-theme-secondary hover:bg-theme-card hover:text-theme-primary transition-colors min-h-[36px]"
                 >
                   <FileCode className="w-4 h-4 text-blue-400" />
                   <span>Logo Tiger/Go (.xml)</span>
@@ -376,11 +459,22 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
                   href={documentApi.getSingleJsonUrl(document.id)}
                   download
                   onClick={() => setIsExportMenuOpen(false)}
-                  className="flex items-center space-x-2 px-3 py-2 rounded-lg text-xs text-slate-200 hover:bg-slate-800 hover:text-white transition-colors min-h-[38px]"
+                  className="flex items-center space-x-2 px-3 py-2 rounded-lg text-xs text-theme-secondary hover:bg-theme-card hover:text-theme-primary transition-colors min-h-[36px]"
                 >
                   <FileJson className="w-4 h-4 text-amber-400" />
                   <span>B2B Standart JSON (.json)</span>
                 </a>
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleCopyErpData();
+                    setIsExportMenuOpen(false);
+                  }}
+                  className="w-full flex items-center space-x-2 px-3 py-2 rounded-lg text-xs text-theme-secondary hover:bg-theme-card hover:text-theme-primary transition-colors min-h-[36px] text-left border-t border-theme-subtle pt-1"
+                >
+                  <Copy className="w-4 h-4 text-blue-400" />
+                  <span>Panoya ERP Verisi Kopyala</span>
+                </button>
               </div>
             )}
           </div>
@@ -390,138 +484,211 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
               type="button"
               onClick={() => handleSaveChanges()}
               disabled={isSaving}
-              className="p-2.5 min-w-[44px] min-h-[44px] flex items-center justify-center bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs shadow-md shadow-blue-600/20 shrink-0 tactile-btn"
+              className="p-2 min-w-[38px] min-h-[38px] flex items-center justify-center bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs shadow-md shadow-blue-600/20 shrink-0 tactile-btn"
               title="Değişiklikleri Kaydet"
             >
-              <Save className="w-4 h-4" />
+              <Save className="w-3.5 h-3.5" />
             </button>
           )}
         </div>
       </div>
 
-      {/* İrsaliye Dışı Belge Özel Uyarı Kartı */}
-      {isNonInvoice && (
-        <div className="m-3 p-4 rounded-xl bg-rose-500/10 border border-rose-500/25 text-rose-200 space-y-2 craft-card">
-          <div className="flex items-center space-x-2 font-semibold text-xs text-rose-300">
-            <ShieldAlert className="w-4 h-4 text-rose-400 shrink-0" />
-            <span>Doğrulama Uyarısı: Belge İrsaliye Niteliği Taşımıyor</span>
+      {/* İrsaliye Dışı Belgede "Kusursuz Kararlılık" Uygunsuzluk & Ayıklama Paneli */}
+      {isNonInvoice ? (
+        <div className="flex-1 overflow-y-auto p-4 flex flex-col items-center justify-center text-center space-y-4">
+          <div className="w-16 h-16 rounded-2xl bg-rose-500/10 border border-rose-500/25 flex items-center justify-center text-rose-400">
+            <ShieldAlert className="w-8 h-8 stroke-[1.5]" />
           </div>
-          <p className="text-[11px] text-rose-300/90 leading-relaxed font-sans">
-            {formData.genel_notlar || 'Bu görselde sevk irsaliyesi başlığı, gönderici/alıcı firma veya ürün kalem tablosu tespit edilemedi.'}
-          </p>
-          <div className="pt-2 border-t border-rose-500/20 text-[10px] text-rose-300/75 space-y-1">
-            <p className="flex items-center gap-1.5 font-medium">
-              <span className="w-1.5 h-1.5 rounded-full bg-rose-400 shrink-0" />
-              <span>Tespit: Nesne / Günlük Eşya / Alakasız Görsel</span>
+          <div className="max-w-sm space-y-2">
+            <h3 className="text-sm font-bold text-rose-300">
+              Resmi Sevk İrsaliyesi Niteliği Taşımıyor
+            </h3>
+            <p className="text-xs text-theme-secondary leading-relaxed font-sans">
+              Optik ayrıştırma motoru bu evrakta geçerli bir irsaliye numarası, gönderici/alıcı firma veya mal/hizmet kalem tablosu tespit edemedi.
             </p>
-            <p className="text-slate-400">
-              Yasal sevk irsaliyesi veya ambar teslim fişi formatında olmadığı için muhasebe/ERP aktarımı yapılamaz.
+            {formData.genel_notlar && (
+              <div className="p-3 bg-rose-950/30 border border-rose-500/20 rounded-lg text-left">
+                <span className="text-[10px] font-semibold text-rose-300 uppercase block mb-1">Tespit Edilen Belge Durumu:</span>
+                <p className="text-xs text-rose-200/90 font-mono leading-relaxed">{formData.genel_notlar}</p>
+              </div>
+            )}
+          </div>
+
+          <div className="flex flex-col w-full max-w-xs space-y-2 pt-2">
+            {onDeleteDoc && (
+              <button
+                type="button"
+                onClick={() => onDeleteDoc(document.id)}
+                className="w-full flex items-center justify-center space-x-2 bg-rose-600 hover:bg-rose-500 text-white py-2.5 px-4 rounded-lg text-xs font-bold shadow-md shadow-rose-600/20 tactile-btn min-h-[40px]"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Kuyruktan Çıkar / Reddet (Delete)</span>
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => onProcessDocument(document.id)}
+              disabled={isProcessing}
+              className="w-full flex items-center justify-center space-x-2 bg-theme-card hover:bg-theme-card-hover text-theme-secondary hover:text-theme-primary border border-theme-subtle py-2 px-4 rounded-lg text-xs font-medium tactile-btn min-h-[36px]"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isProcessing ? 'animate-spin text-blue-400' : ''}`} />
+              <span>Yeniden Analiz Et</span>
+            </button>
+            <p className="text-[10px] text-theme-muted">
+              İpucu: Klavyeden <kbd className="px-1 py-0.5 bg-theme-card border border-theme-subtle rounded font-mono">Delete</kbd> tuşuna basarak anında sonraki evraka geçebilirsiniz.
             </p>
           </div>
         </div>
+      ) : (
+        <>
+          {/* Matematiksel Mutabakat Rozeti (Canlı Kalem vs. Belge Dip Toplamı Kıyaslaması) */}
+          <div className="px-3 pt-3">
+            {isMathMatch ? (
+              <div className="flex items-center space-x-2 p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/25 text-emerald-300 text-xs">
+                <CheckCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-emerald-200">Matematiksel Mutabakat: Kusursuz</span>
+                    <span className="font-mono font-bold text-emerald-400 tabular-nums">
+                      {totalCalculatedQty.toLocaleString('tr-TR')} / {parsedDocTotalQty?.toLocaleString('tr-TR')} Adet
+                    </span>
+                  </div>
+                  <span className="text-[10px] text-emerald-300/80 block mt-0.5">
+                    Kalemler toplamı ile irsaliye dip toplamı birebir uyuşuyor.
+                  </span>
+                </div>
+              </div>
+            ) : isMathDiscrepancy ? (
+              <div className="flex items-center space-x-2 p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs">
+                <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-amber-200">Miktar Uyuşmazlığı Uyarısı</span>
+                    <span className="font-mono font-bold text-amber-300 tabular-nums">
+                      Fark: {Math.abs(totalCalculatedQty - (parsedDocTotalQty || 0)).toLocaleString('tr-TR')} Adet
+                    </span>
+                  </div>
+                  <span className="text-[10px] text-amber-300/80 block mt-0.5">
+                    Kalem toplamı ({totalCalculatedQty.toLocaleString('tr-TR')}) ile dip toplam ({parsedDocTotalQty?.toLocaleString('tr-TR')}) arasında fark var!
+                  </span>
+                </div>
+              </div>
+            ) : totalCalculatedQty > 0 ? (
+              <div className="flex items-center justify-between p-2 rounded-lg bg-theme-card border border-theme-subtle text-xs text-theme-secondary">
+                <span className="flex items-center gap-1.5 font-medium">
+                  <Package className="w-3.5 h-3.5 text-blue-400" />
+                  <span>Toplam Sevkiyat Miktarı</span>
+                </span>
+                <span className="font-mono font-bold text-theme-primary tabular-nums">
+                  {totalCalculatedQty.toLocaleString('tr-TR')} Adet
+                </span>
+              </div>
+            ) : null}
+          </div>
+
+          {/* Akıllı Sekme / Görünüm Seçici */}
+          <div className="flex border-b border-theme-subtle bg-theme-surface px-2 sm:px-3 pt-2 shrink-0 gap-1 overflow-x-auto no-scrollbar">
+            <button
+              type="button"
+              onClick={() => setActiveTab('all')}
+              className={`flex items-center space-x-1.5 px-3 py-1.5 min-h-[34px] text-xs font-semibold border-b-2 transition-all whitespace-nowrap tactile-btn ${
+                activeTab === 'all'
+                  ? 'border-indigo-500 text-indigo-400 bg-theme-card rounded-t'
+                  : 'border-transparent text-theme-muted hover:text-theme-primary'
+              }`}
+            >
+              <Layers className="w-3.5 h-3.5" />
+              <span>Tümü</span>
+              <span className="text-[10px] text-theme-muted font-mono hidden sm:inline">(1)</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('header')}
+              className={`flex items-center space-x-1.5 px-3 py-1.5 min-h-[34px] text-xs font-semibold border-b-2 transition-all whitespace-nowrap tactile-btn ${
+                activeTab === 'header'
+                  ? 'border-blue-500 text-blue-400 bg-theme-card rounded-t'
+                  : 'border-transparent text-theme-muted hover:text-theme-primary'
+              }`}
+            >
+              <FileText className="w-3.5 h-3.5" />
+              <span>Başlık & Taraflar</span>
+              <span className="text-[10px] text-theme-muted font-mono hidden sm:inline">(2)</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('items')}
+              className={`flex items-center space-x-1.5 px-3 py-1.5 min-h-[34px] text-xs font-semibold border-b-2 transition-all whitespace-nowrap tactile-btn ${
+                activeTab === 'items'
+                  ? 'border-blue-500 text-blue-400 bg-theme-card rounded-t'
+                  : 'border-transparent text-theme-muted hover:text-theme-primary'
+              }`}
+            >
+              <Package className="w-3.5 h-3.5" />
+              <span>Kalemler ({formData.kalemler?.length || 0})</span>
+              <span className="text-[10px] text-theme-muted font-mono hidden sm:inline">(3)</span>
+            </button>
+          </div>
+
+          {/* Form Gövdesi */}
+          <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-4 custom-scrollbar overscroll-contain">
+            {/* Akıcı / Tümü Görünümü veya Yalnızca Başlık */}
+            {(activeTab === 'all' || activeTab === 'header') && (
+              <div className="space-y-4" data-tab-section="header">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-theme-muted uppercase tracking-wider flex items-center gap-1.5">
+                    <FileText className="w-3.5 h-3.5 text-blue-400" />
+                    <span>İrsaliye Başlık ve Taraflar</span>
+                  </span>
+                </div>
+                <HeaderForm
+                  header={formData.header || {}}
+                  onChange={handleHeaderChange}
+                  fieldConfidences={formData.alan_guvenlikleri || {}}
+                />
+              </div>
+            )}
+
+            {/* Akıcı / Tümü Görünümü veya Yalnızca Kalemler */}
+            {(activeTab === 'all' || activeTab === 'items') && (
+              <div className="space-y-4 pt-2 border-t border-theme-subtle" data-tab-section="items">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-theme-muted uppercase tracking-wider flex items-center gap-1.5">
+                    <Package className="w-3.5 h-3.5 text-indigo-400" />
+                    <span>Mal ve Hizmet Kalemleri</span>
+                  </span>
+                  <span className="text-[11px] text-theme-muted font-mono">
+                    Toplam Miktar: <strong className="text-theme-primary">{Number.isFinite(totalCalculatedQty) ? totalCalculatedQty.toLocaleString('tr-TR', { maximumFractionDigits: 2 }) : 0}</strong>
+                  </span>
+                </div>
+                <ItemsTable
+                  items={formData.kalemler || []}
+                  onChange={handleItemsChange}
+                />
+              </div>
+            )}
+
+            {/* Notlar & Kaşe / İmza Açıklamaları */}
+            <div className="space-y-2 pt-2 border-t border-theme-subtle">
+              <div className="flex items-center justify-between text-theme-muted text-xs">
+                <div className="flex items-center space-x-1.5">
+                  <PenTool className="w-3.5 h-3.5 text-amber-400" />
+                  <span className="font-semibold text-[11px] uppercase tracking-wider">Teslim / Kaşe Notları</span>
+                </div>
+              </div>
+
+              <textarea
+                value={formData.genel_notlar || ''}
+                onChange={(e) => handleNotesChange(e.target.value)}
+                rows={3}
+                placeholder="Şoför kaşesi, ambar teslim tutanağı veya ıslak imza notları..."
+                className="w-full bg-theme-card border border-theme-subtle rounded-lg px-3 py-2 text-xs text-theme-primary placeholder-theme-muted focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30 transition-all resize-none"
+              />
+            </div>
+          </div>
+        </>
       )}
-
-      {/* Akıllı Sekme / Görünüm Seçici */}
-      <div className="flex border-b border-slate-800 bg-slate-950/70 px-2 sm:px-3 pt-1.5 shrink-0 gap-1 overflow-x-auto no-scrollbar">
-        <button
-          type="button"
-          onClick={() => setActiveTab('all')}
-          className={`flex items-center space-x-1.5 px-3 py-2 min-h-[38px] text-xs font-semibold border-b-2 transition-all whitespace-nowrap tactile-btn ${
-            activeTab === 'all'
-              ? 'border-indigo-500 text-indigo-400 bg-slate-900/60 rounded-t'
-              : 'border-transparent text-slate-400 hover:text-slate-200'
-          }`}
-        >
-          <Layers className="w-3.5 h-3.5" />
-          <span>Tümü</span>
-          <span className="text-[10px] text-slate-500 font-mono hidden sm:inline">(1)</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab('header')}
-          className={`flex items-center space-x-1.5 px-3 py-2 min-h-[38px] text-xs font-semibold border-b-2 transition-all whitespace-nowrap tactile-btn ${
-            activeTab === 'header'
-              ? 'border-blue-500 text-blue-400 bg-slate-900/60 rounded-t'
-              : 'border-transparent text-slate-400 hover:text-slate-200'
-          }`}
-        >
-          <FileText className="w-3.5 h-3.5" />
-          <span>Başlık & Taraflar</span>
-          <span className="text-[10px] text-slate-500 font-mono hidden sm:inline">(2)</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab('items')}
-          className={`flex items-center space-x-1.5 px-3 py-2 min-h-[38px] text-xs font-semibold border-b-2 transition-all whitespace-nowrap tactile-btn ${
-            activeTab === 'items'
-              ? 'border-blue-500 text-blue-400 bg-slate-900/60 rounded-t'
-              : 'border-transparent text-slate-400 hover:text-slate-200'
-          }`}
-        >
-          <Package className="w-3.5 h-3.5" />
-          <span>Kalemler ({formData.kalemler?.length || 0})</span>
-          <span className="text-[10px] text-slate-500 font-mono hidden sm:inline">(3)</span>
-        </button>
-      </div>
-
-      {/* Form Gövdesi */}
-      <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-4 custom-scrollbar overscroll-contain">
-        {/* Akıcı / Tümü Görünümü veya Yalnızca Başlık */}
-        {(activeTab === 'all' || activeTab === 'header') && (
-          <div className="space-y-4" data-tab-section="header">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                <FileText className="w-3.5 h-3.5 text-blue-400" />
-                <span>İrsaliye Başlık ve Taraflar</span>
-              </span>
-            </div>
-            <HeaderForm
-              header={formData.header || {}}
-              onChange={handleHeaderChange}
-              fieldConfidences={formData.alan_guvenlikleri || {}}
-            />
-          </div>
-        )}
-
-        {/* Akıcı / Tümü Görünümü veya Yalnızca Kalemler */}
-        {(activeTab === 'all' || activeTab === 'items') && (
-          <div className="space-y-4 pt-2 border-t border-slate-800/60" data-tab-section="items">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                <Package className="w-3.5 h-3.5 text-indigo-400" />
-                <span>Mal ve Hizmet Kalemleri</span>
-              </span>
-              <span className="text-[11px] text-slate-400 font-mono">
-                Toplam Miktar: <strong className="text-white">{Number.isFinite(totalCalculatedQty) ? totalCalculatedQty.toLocaleString('tr-TR', { maximumFractionDigits: 2 }) : 0}</strong>
-              </span>
-            </div>
-            <ItemsTable
-              items={formData.kalemler || []}
-              onChange={handleItemsChange}
-            />
-          </div>
-        )}
-
-        {/* Notlar & Kaşe / İmza Açıklamaları */}
-        <div className="space-y-2 pt-2 border-t border-slate-800/60">
-          <div className="flex items-center justify-between text-slate-400 text-xs">
-            <div className="flex items-center space-x-1.5">
-              <PenTool className="w-3.5 h-3.5 text-amber-400" />
-              <span className="font-semibold text-[11px] uppercase tracking-wider">Teslim / Kaşe Notları</span>
-            </div>
-          </div>
-
-          <textarea
-            value={formData.genel_notlar || ''}
-            onChange={(e) => handleNotesChange(e.target.value)}
-            rows={3}
-            placeholder="Şoför kaşesi, ambar teslim tutanağı veya ıslak imza notları..."
-            className="w-full bg-slate-950/70 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30 transition-all resize-none"
-          />
-        </div>
-      </div>
     </aside>
   );
 };

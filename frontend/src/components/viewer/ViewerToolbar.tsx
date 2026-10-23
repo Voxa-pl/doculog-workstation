@@ -41,22 +41,22 @@ export const ViewerToolbar: React.FC<ViewerToolbarProps> = ({
   const safeRotation = Number.isFinite(rotation) ? ((rotation % 360) + 360) % 360 : 0;
 
   return (
-    <div className="absolute top-2.5 sm:top-3 left-1/2 -translate-x-1/2 bg-slate-900/90 backdrop-blur-md border border-slate-700/60 rounded-full px-2 sm:px-3 py-1.5 flex items-center space-x-1 sm:space-x-2 text-xs select-none shadow-2xl z-20 hover:bg-slate-900/95 hover:border-slate-600 transition-all max-w-[calc(100vw-16px)] sm:max-w-fit overflow-x-auto no-scrollbar touch-pan-x">
+    <div className="absolute top-2.5 sm:top-3 left-1/2 -translate-x-1/2 bg-theme-surface/90 backdrop-blur-md border border-theme-subtle rounded-full px-2 sm:px-3 py-1 flex items-center space-x-1 sm:space-x-2 text-xs select-none shadow-2xl z-20 hover:bg-theme-surface hover:border-theme-strong transition-all max-w-[calc(100vw-16px)] sm:max-w-fit overflow-x-auto no-scrollbar touch-pan-x">
       <div className="flex items-center space-x-0.5 sm:space-x-1 shrink-0">
         <button
           type="button"
           onClick={onZoomOut}
-          className="p-2 min-w-[40px] min-h-[40px] flex items-center justify-center text-slate-300 hover:text-white hover:bg-slate-800 rounded-full tactile-icon"
+          className="p-1.5 min-w-[34px] min-h-[34px] flex items-center justify-center text-theme-secondary hover:text-theme-primary hover:bg-theme-card rounded-full tactile-icon"
           title="Uzaklaştır (-)"
           aria-label="Uzaklaştır"
         >
-          <ZoomOut className="w-4 h-4" />
+          <ZoomOut className="w-3.5 h-3.5" />
         </button>
 
         <button
           type="button"
           onClick={onResetZoom}
-          className="px-2 py-1.5 min-h-[40px] min-w-[48px] flex items-center justify-center text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg font-mono text-[11px] text-center tactile-btn"
+          className="px-2 py-1 min-h-[34px] min-w-[44px] flex items-center justify-center text-theme-secondary hover:text-theme-primary hover:bg-theme-card rounded-md font-mono text-[11px] text-center tabular-nums tactile-btn"
           title="Orijinal Boyut (%100)"
           aria-label="Orijinal Boyut"
         >
@@ -66,42 +66,42 @@ export const ViewerToolbar: React.FC<ViewerToolbarProps> = ({
         <button
           type="button"
           onClick={onZoomIn}
-          className="p-2 min-w-[40px] min-h-[40px] flex items-center justify-center text-slate-300 hover:text-white hover:bg-slate-800 rounded-full tactile-icon"
+          className="p-1.5 min-w-[34px] min-h-[34px] flex items-center justify-center text-theme-secondary hover:text-theme-primary hover:bg-theme-card rounded-full tactile-icon"
           title="Yakınlaştır (+)"
           aria-label="Yakınlaştır"
         >
-          <ZoomIn className="w-4 h-4" />
+          <ZoomIn className="w-3.5 h-3.5" />
         </button>
 
-        <div className="w-px h-5 bg-slate-800 mx-0.5 sm:mx-1 shrink-0" />
+        <div className="w-px h-4 bg-theme-subtle mx-0.5 sm:mx-1 shrink-0" />
 
         <button
           type="button"
           onClick={onFitToScreen}
-          className="flex items-center space-x-1 px-2.5 py-1.5 min-h-[40px] min-w-[40px] justify-center text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg tactile-btn"
+          className="flex items-center space-x-1 px-2 py-1 min-h-[34px] min-w-[34px] justify-center text-theme-secondary hover:text-theme-primary hover:bg-theme-card rounded-md tactile-btn"
           title="Ekrana Sığdır (F)"
           aria-label="Ekrana Sığdır"
         >
-          <Maximize2 className="w-4 h-4" />
-          <span className="hidden sm:inline font-medium">Sığdır</span>
+          <Maximize2 className="w-3.5 h-3.5" />
+          <span className="hidden sm:inline font-medium text-[11px]">Sığdır</span>
         </button>
       </div>
 
-      <div className="flex items-center space-x-0.5 sm:space-x-1 bg-slate-950/60 border border-slate-800 px-1 py-0.5 rounded-lg shrink-0">
+      <div className="flex items-center space-x-0.5 sm:space-x-1 bg-theme-card border border-theme-subtle px-1 py-0.5 rounded-md shrink-0">
         <button
           type="button"
           onClick={onRotateCounterClockwise}
           disabled={isSavingRotation}
-          className="p-2 min-w-[40px] min-h-[40px] flex items-center justify-center text-slate-300 hover:text-white hover:bg-slate-800 disabled:opacity-50 rounded tactile-icon"
+          className="p-1.5 min-w-[32px] min-h-[32px] flex items-center justify-center text-theme-secondary hover:text-theme-primary hover:bg-theme-card-hover disabled:opacity-50 rounded tactile-icon"
           title="Sola 90° Döndür"
           aria-label="Sola 90° Döndür"
         >
-          <RotateCcw className="w-4 h-4" />
+          <RotateCcw className="w-3.5 h-3.5" />
         </button>
 
-        <span className="font-mono text-[11px] text-slate-400 px-1 min-w-[36px] text-center whitespace-nowrap flex items-center justify-center">
+        <span className="font-mono text-[11px] text-theme-secondary px-1 min-w-[34px] text-center whitespace-nowrap flex items-center justify-center tabular-nums">
           {isSavingRotation ? (
-            <RefreshCw className="w-3.5 h-3.5 text-blue-400 animate-spin" />
+            <RefreshCw className="w-3 h-3 text-blue-400 animate-spin" />
           ) : (
             `${safeRotation}°`
           )}
@@ -111,11 +111,11 @@ export const ViewerToolbar: React.FC<ViewerToolbarProps> = ({
           type="button"
           onClick={onRotateClockwise}
           disabled={isSavingRotation}
-          className="p-2 min-w-[40px] min-h-[40px] flex items-center justify-center text-slate-300 hover:text-white hover:bg-slate-800 disabled:opacity-50 rounded tactile-icon"
+          className="p-1.5 min-w-[32px] min-h-[32px] flex items-center justify-center text-theme-secondary hover:text-theme-primary hover:bg-theme-card-hover disabled:opacity-50 rounded tactile-icon"
           title="Sağa 90° Döndür (R)"
           aria-label="Sağa 90° Döndür"
         >
-          <RotateCw className="w-4 h-4" />
+          <RotateCw className="w-3.5 h-3.5" />
         </button>
       </div>
 
@@ -123,16 +123,16 @@ export const ViewerToolbar: React.FC<ViewerToolbarProps> = ({
         <button
           type="button"
           onClick={onToggleContrast}
-          className={`flex items-center space-x-1.5 px-2.5 py-1.5 min-h-[40px] min-w-[40px] justify-center rounded-lg tactile-btn ${
+          className={`flex items-center space-x-1.5 px-2 py-1 min-h-[34px] min-w-[34px] justify-center rounded-md tactile-btn ${
             contrastBoost
               ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-              : 'text-slate-300 hover:text-white hover:bg-slate-800'
+              : 'text-theme-secondary hover:text-theme-primary hover:bg-theme-card'
           }`}
           title="Görüntü Kontrastı"
           aria-label="Görüntü Kontrastı"
         >
-          <Contrast className="w-4 h-4" />
-          <span className="hidden sm:inline font-medium">Kontrast {contrastBoost ? 'Açık' : ''}</span>
+          <Contrast className="w-3.5 h-3.5" />
+          <span className="hidden sm:inline font-medium text-[11px]">Kontrast {contrastBoost ? 'Açık' : ''}</span>
         </button>
       </div>
     </div>

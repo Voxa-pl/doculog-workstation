@@ -107,12 +107,12 @@ export const QueueItem: React.FC<QueueItemProps> = ({
       onClick={onSelect}
       className={`group relative p-2.5 rounded-lg border cursor-pointer select-none min-w-0 tactile-card overflow-hidden ${
         isSelected
-          ? 'bg-blue-950/40 border-blue-500 shadow-md ring-1 ring-blue-500/30'
+          ? 'bg-blue-600/10 border-blue-500 shadow-sm ring-1 ring-blue-500/30'
           : isChecked
           ? 'bg-purple-950/30 border-purple-500/60'
           : isNonInvoice
           ? 'bg-rose-950/20 border-rose-500/30 hover:border-rose-500/50'
-          : 'bg-slate-900/60 border-slate-800/80 hover:bg-slate-900 hover:border-slate-700'
+          : 'bg-theme-card/70 border-theme-subtle hover:bg-theme-card hover:border-theme-strong'
       } ${doc.durum === 'isleniyor' ? 'state-processing' : ''}`}
     >
       {/* Seçili Belge Sol Akrilik Şerit (Linear Craft Indicator) */}
@@ -127,17 +127,17 @@ export const QueueItem: React.FC<QueueItemProps> = ({
               e.stopPropagation();
               if (onToggleCheck) onToggleCheck(e);
             }}
-            className="flex items-center justify-center shrink-0 min-w-[40px] min-h-[40px] text-slate-400 hover:text-purple-300 tactile-icon"
+            className="flex items-center justify-center shrink-0 min-w-[36px] min-h-[36px] text-theme-muted hover:text-purple-300 tactile-icon"
           >
             {isChecked ? (
               <CheckSquare className="w-4 h-4 text-purple-400" />
             ) : (
-              <Square className="w-4 h-4 text-slate-600" />
+              <Square className="w-4 h-4 text-theme-muted/60" />
             )}
           </div>
         )}
 
-        <div className="w-14 h-16 rounded bg-slate-950 border border-slate-800 overflow-hidden shrink-0 relative flex items-center justify-center">
+        <div className="w-14 h-16 rounded bg-theme-app border border-theme-subtle overflow-hidden shrink-0 relative flex items-center justify-center">
           <img
             src={thumbUrl}
             alt={doc.dosya_adi}
@@ -163,13 +163,13 @@ export const QueueItem: React.FC<QueueItemProps> = ({
         <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5">
           <div className="min-w-0">
             <div className="flex items-center justify-between gap-1 mb-1 min-w-0">
-              <span className="text-xs font-medium text-white truncate min-w-0 flex-1" title={doc.dosya_adi}>
+              <span className="text-xs font-medium text-theme-primary truncate min-w-0 flex-1" title={doc.dosya_adi}>
                 {doc.dosya_adi}
               </span>
               <button
                 type="button"
                 onClick={onDelete}
-                className="opacity-80 sm:opacity-0 sm:group-hover:opacity-100 text-slate-500 hover:text-rose-400 min-w-[38px] min-h-[38px] flex items-center justify-center p-1 rounded-lg shrink-0 tactile-icon"
+                className="opacity-80 sm:opacity-0 sm:group-hover:opacity-100 text-theme-muted hover:text-rose-400 min-w-[34px] min-h-[34px] flex items-center justify-center p-1 rounded-md shrink-0 tactile-icon"
                 title="Kuyruktan Sil"
                 aria-label="Kuyruktan Sil"
               >
@@ -177,30 +177,30 @@ export const QueueItem: React.FC<QueueItemProps> = ({
               </button>
             </div>
 
-            <div className="text-[11px] font-mono text-slate-400 truncate min-w-0">
+            <div className="text-[11px] font-mono text-theme-secondary truncate min-w-0">
               {irsaliyeNo ? (
-                <span className="text-blue-300 font-semibold truncate block" title={irsaliyeNo}>{irsaliyeNo}</span>
+                <span className="text-blue-400 font-semibold truncate block" title={irsaliyeNo}>{irsaliyeNo}</span>
               ) : (
                 <span>{(safeBytes / 1024).toFixed(0)} KB</span>
               )}
             </div>
           </div>
 
-          <div className="flex items-center justify-between mt-1.5 pt-1 border-t border-slate-800/60 min-w-0 gap-1">
+          <div className="flex items-center justify-between mt-1.5 pt-1 border-t border-theme-subtle min-w-0 gap-1">
             <div className="shrink-0">{getStatusBadge(doc.durum)}</div>
 
             {doc.durum === 'kuyrukta' && (
               <button
                 type="button"
                 onClick={onProcess}
-                className="text-[11px] bg-blue-600/20 hover:bg-blue-600 border border-blue-500/30 text-blue-300 hover:text-white px-3 py-1.5 min-h-[36px] min-w-[50px] rounded-lg font-semibold shrink-0 flex items-center justify-center tactile-btn"
+                className="text-[11px] bg-blue-600/20 hover:bg-blue-600 border border-blue-500/30 text-blue-300 hover:text-white px-2.5 py-1 min-h-[30px] rounded-md font-semibold shrink-0 flex items-center justify-center tactile-btn"
               >
                 İşle
               </button>
             )}
 
             {itemsCount !== undefined && itemsCount > 0 && (
-              <span className="text-[10px] text-slate-400 font-medium shrink-0">
+              <span className="text-[10px] text-theme-muted font-medium font-mono shrink-0">
                 {itemsCount} Kalem
               </span>
             )}

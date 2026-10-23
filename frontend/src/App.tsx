@@ -380,6 +380,7 @@ export const App: React.FC = () => {
                 onUpdateDocument={handleUpdateDocument}
                 onProcessDocument={handleProcessDoc}
                 onSelectNextDoc={handleSelectNextDoc}
+                onDeleteDoc={handleDeleteDoc}
                 isProcessing={isProcessingCurrent}
               />
             </ErrorBoundary>

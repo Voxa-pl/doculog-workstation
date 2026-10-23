@@ -54,7 +54,7 @@ export const HeaderForm: React.FC<HeaderFormProps> = ({
     }
 
     return {
-      borderClass: 'border-slate-800 focus:border-blue-500',
+      borderClass: 'border-theme-subtle focus:border-blue-500',
       badgeClass: 'text-emerald-400/80 bg-emerald-500/10 border-emerald-500/20',
       text: conf !== undefined ? `%${Math.round(conf * 100)}` : null,
       isSuspicious: false
@@ -74,7 +74,7 @@ export const HeaderForm: React.FC<HeaderFormProps> = ({
     return (
       <div className={`min-w-0 ${className}`}>
         <div className="flex items-center justify-between mb-1 gap-1">
-          <label className="text-[10px] text-slate-400 font-medium truncate block min-w-0" title={label}>
+          <label className="text-[10px] text-theme-muted font-medium truncate block min-w-0" title={label}>
             {label}
           </label>
           {status.text && (
@@ -89,7 +89,7 @@ export const HeaderForm: React.FC<HeaderFormProps> = ({
           onChange={(e) => handleChange(field, e.target.value)}
           placeholder={placeholder}
           data-suspicious={status.isSuspicious ? 'true' : undefined}
-          className={`w-full bg-slate-900 border rounded-lg px-2.5 py-2 text-xs sm:text-sm text-white transition-all outline-none min-h-[38px] truncate ${status.borderClass}`}
+          className={`w-full bg-theme-surface border rounded-md px-2.5 py-1.5 text-xs text-theme-primary transition-all outline-none min-h-[34px] truncate ${status.borderClass}`}
         />
       </div>
     );
@@ -102,7 +102,7 @@ export const HeaderForm: React.FC<HeaderFormProps> = ({
   return (
     <div className="space-y-3.5 text-xs">
       {/* 1. İrsaliye ve Tarih */}
-      <div className="bg-slate-950/60 border border-slate-800/80 rounded-lg p-3 space-y-2.5 min-w-0">
+      <div className="bg-theme-card/60 border border-theme-subtle rounded-lg p-3 space-y-2.5 min-w-0">
         <div className="flex items-center space-x-1.5 text-blue-400 font-semibold uppercase text-[11px] tracking-wider">
           <Hash className="w-3.5 h-3.5 shrink-0" />
           <span>İrsaliye ve Tarih Bilgileri</span>
@@ -115,11 +115,11 @@ export const HeaderForm: React.FC<HeaderFormProps> = ({
 
           <div className="min-w-0">
             <div className="flex items-center justify-between mb-1 gap-1">
-              <label className="text-[10px] text-slate-400 font-medium truncate block min-w-0">
+              <label className="text-[10px] text-theme-muted font-medium truncate block min-w-0">
                 Fiili Sevk Tarihi / Saati
               </label>
               {sevkTarihiConf !== undefined && (
-                <span className="text-[9px] font-mono px-1 py-0.2 rounded border text-slate-400 bg-slate-800 border-slate-700 shrink-0">
+                <span className="text-[9px] font-mono px-1 py-0.2 rounded border text-theme-muted bg-theme-card border-theme-subtle shrink-0">
                   %{Math.round(sevkTarihiConf * 100)}
                 </span>
               )}
@@ -131,7 +131,7 @@ export const HeaderForm: React.FC<HeaderFormProps> = ({
                 onChange={(e) => handleChange('sevk_tarihi', e.target.value)}
                 placeholder="GG.AA.YYYY"
                 data-suspicious={getFieldStatus('sevk_tarihi', currentHeader.sevk_tarihi).isSuspicious ? 'true' : undefined}
-                className={`w-2/3 bg-slate-900 border rounded-lg px-2.5 py-2 text-xs sm:text-sm text-white font-mono outline-none min-h-[38px] truncate ${getFieldStatus('sevk_tarihi', currentHeader.sevk_tarihi).borderClass}`}
+                className={`w-2/3 bg-theme-surface border rounded-md px-2.5 py-1.5 text-xs text-theme-primary font-mono outline-none min-h-[34px] truncate ${getFieldStatus('sevk_tarihi', currentHeader.sevk_tarihi).borderClass}`}
               />
               <input
                 type="text"
@@ -139,7 +139,7 @@ export const HeaderForm: React.FC<HeaderFormProps> = ({
                 onChange={(e) => handleChange('sevk_saati', e.target.value)}
                 placeholder="SS:DD"
                 data-suspicious={getFieldStatus('sevk_saati', currentHeader.sevk_saati).isSuspicious ? 'true' : undefined}
-                className={`w-1/3 bg-slate-900 border rounded-lg px-2.5 py-2 text-xs sm:text-sm text-white font-mono text-center outline-none min-h-[38px] truncate ${getFieldStatus('sevk_saati', currentHeader.sevk_saati).borderClass}`}
+                className={`w-1/3 bg-theme-surface border rounded-md px-2.5 py-1.5 text-xs text-theme-primary font-mono text-center outline-none min-h-[34px] truncate ${getFieldStatus('sevk_saati', currentHeader.sevk_saati).borderClass}`}
               />
             </div>
           </div>
@@ -147,7 +147,7 @@ export const HeaderForm: React.FC<HeaderFormProps> = ({
       </div>
 
       {/* 2. Gönderici */}
-      <div className="bg-slate-950/60 border border-slate-800/80 rounded-lg p-3 space-y-2 min-w-0">
+      <div className="bg-theme-card/60 border border-theme-subtle rounded-lg p-3 space-y-2 min-w-0">
         <div className="flex items-center space-x-1.5 text-emerald-400 font-semibold uppercase text-[11px] tracking-wider">
           <Building2 className="w-3.5 h-3.5 shrink-0" />
           <span>Gönderici (Çıkış Noktası / Satıcı)</span>
@@ -164,7 +164,7 @@ export const HeaderForm: React.FC<HeaderFormProps> = ({
       </div>
 
       {/* 3. Alıcı */}
-      <div className="bg-slate-950/60 border border-slate-800/80 rounded-lg p-3 space-y-2 min-w-0">
+      <div className="bg-theme-card/60 border border-theme-subtle rounded-lg p-3 space-y-2 min-w-0">
         <div className="flex items-center space-x-1.5 text-amber-400 font-semibold uppercase text-[11px] tracking-wider">
           <MapPin className="w-3.5 h-3.5 shrink-0" />
           <span>Alıcı (Varış / Teslimat Cari)</span>
@@ -181,7 +181,7 @@ export const HeaderForm: React.FC<HeaderFormProps> = ({
       </div>
 
       {/* 4. Nakliye ve Lojistik */}
-      <div className="bg-slate-950/60 border border-slate-800/80 rounded-lg p-3 space-y-2 min-w-0">
+      <div className="bg-theme-card/60 border border-theme-subtle rounded-lg p-3 space-y-2 min-w-0">
         <div className="flex items-center space-x-1.5 text-purple-400 font-semibold uppercase text-[11px] tracking-wider">
           <Truck className="w-3.5 h-3.5 shrink-0" />
           <span>Taşıyıcı, Plaka ve Şoför</span>

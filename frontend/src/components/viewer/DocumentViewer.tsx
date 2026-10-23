@@ -397,7 +397,7 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
   const safeRotation = Number.isFinite(rotation) ? rotation : 0;
 
   return (
-    <main className="flex-1 h-full bg-slate-950 flex flex-col min-w-0 select-none relative overflow-hidden">
+    <main className="flex-1 h-full bg-theme-app flex flex-col min-w-0 select-none relative overflow-hidden">
       {document && (
         <ViewerToolbar
           zoom={safeZoom}
@@ -416,32 +416,32 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
 
       {/* Çok Sayfalı İrsaliye Sayfa Gezgini */}
       {document && pages.length > 1 && (
-        <div className="absolute bottom-3 sm:bottom-4 md:bottom-auto md:top-14 left-1/2 -translate-x-1/2 bg-slate-900/90 backdrop-blur-md border border-purple-500/40 rounded-full px-2 sm:px-3 py-1 flex items-center space-x-1.5 sm:space-x-2 text-xs select-none z-20 shadow-2xl max-w-[calc(100vw-20px)] sm:max-w-fit overflow-x-auto no-scrollbar">
+        <div className="absolute bottom-3 sm:bottom-4 md:bottom-auto md:top-14 left-1/2 -translate-x-1/2 bg-theme-surface/90 backdrop-blur-md border border-purple-500/40 rounded-full px-2 sm:px-3 py-1 flex items-center space-x-1.5 sm:space-x-2 text-xs select-none z-20 shadow-2xl max-w-[calc(100vw-20px)] sm:max-w-fit overflow-x-auto no-scrollbar">
           <div className="flex items-center space-x-1 sm:space-x-2 shrink-0">
             <span className="text-[11px] text-purple-300 font-semibold flex items-center shrink-0">
               <Layers className="w-3.5 h-3.5 mr-1 text-purple-400" />
               <span className="hidden sm:inline">Çok Sayfalı İrsaliye</span>
               <span className="sm:hidden font-medium">Sayfalar</span>
             </span>
-            <div className="flex items-center space-x-0.5 sm:space-x-1 bg-slate-950 border border-slate-800 rounded px-1.5 py-0.5">
+            <div className="flex items-center space-x-0.5 sm:space-x-1 bg-theme-card border border-theme-subtle rounded px-1.5 py-0.5">
               <button
                 type="button"
                 disabled={activePageIndex === 0}
                 onClick={() => setActivePageIndex((p) => Math.max(0, p - 1))}
-                className="p-1 min-w-[36px] min-h-[36px] flex items-center justify-center text-slate-400 hover:text-white disabled:opacity-30 transition-colors active:scale-95"
+                className="p-1 min-w-[34px] min-h-[34px] flex items-center justify-center text-theme-muted hover:text-theme-primary disabled:opacity-30 transition-colors active:scale-95"
                 title="Önceki Sayfa"
                 aria-label="Önceki Sayfa"
               >
                 <ChevronLeft className="w-4 h-4" />
               </button>
-              <span className="font-mono text-[11px] text-slate-200 px-1 font-medium whitespace-nowrap">
+              <span className="font-mono text-[11px] text-theme-primary px-1 font-medium whitespace-nowrap tabular-nums">
                 {activePageIndex + 1} / {pages.length}
               </span>
               <button
                 type="button"
                 disabled={activePageIndex === pages.length - 1}
                 onClick={() => setActivePageIndex((p) => Math.min(pages.length - 1, p + 1))}
-                className="p-1 min-w-[36px] min-h-[36px] flex items-center justify-center text-slate-400 hover:text-white disabled:opacity-30 transition-colors active:scale-95"
+                className="p-1 min-w-[34px] min-h-[34px] flex items-center justify-center text-theme-muted hover:text-theme-primary disabled:opacity-30 transition-colors active:scale-95"
                 title="Sonraki Sayfa"
                 aria-label="Sonraki Sayfa"
               >
@@ -456,10 +456,10 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
                 type="button"
                 key={idx}
                 onClick={() => setActivePageIndex(idx)}
-                className={`px-2.5 py-1 min-w-[36px] min-h-[36px] rounded text-xs font-semibold transition-all flex items-center justify-center active:scale-95 ${
+                className={`px-2.5 py-1 min-w-[34px] min-h-[34px] rounded text-xs font-semibold transition-all flex items-center justify-center active:scale-95 ${
                   activePageIndex === idx
                     ? 'bg-purple-600 text-white shadow-sm'
-                    : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white'
+                    : 'bg-theme-card text-theme-muted hover:bg-theme-card-hover hover:text-theme-primary'
                 }`}
               >
                 {idx + 1}
@@ -488,8 +488,8 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
       >
         {!document ? (
           <div className="flex flex-col items-center justify-center text-center p-8 select-none">
-            <FileQuestion className="w-10 h-10 stroke-[1.2] mb-2 text-slate-700/50" />
-            <p className="text-xs font-medium text-slate-500">Belge Bekleniyor</p>
+            <FileQuestion className="w-10 h-10 stroke-[1.2] mb-2 text-theme-muted/40" />
+            <p className="text-xs font-medium text-theme-muted">Belge Bekleniyor</p>
           </div>
         ) : (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">

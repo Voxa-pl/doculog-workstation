@@ -131,12 +131,12 @@ export const BatchQueue: React.FC<BatchQueueProps> = ({
   };
 
   return (
-    <aside className="w-full md:w-72 lg:w-80 h-full bg-slate-900/90 border-r border-slate-800 flex flex-col shrink-0 select-none overflow-hidden min-w-0">
-      <div className="p-3 border-b border-slate-800 space-y-2.5 min-w-0">
+    <aside className="w-full md:w-72 lg:w-80 h-full bg-theme-surface border-r border-theme-subtle flex flex-col shrink-0 select-none overflow-hidden min-w-0">
+      <div className="p-3 border-b border-theme-subtle space-y-2.5 min-w-0">
         <div className="flex items-center justify-between min-w-0 gap-1">
           <div className="flex items-center space-x-2 min-w-0">
             <Files className="w-4 h-4 text-blue-400 shrink-0" />
-            <h2 className="text-xs font-semibold text-white tracking-wide uppercase truncate">
+            <h2 className="text-xs font-semibold text-theme-primary tracking-wide uppercase truncate">
               Evrak Kuyruğu ({safeDocs.length})
             </h2>
           </div>
@@ -152,10 +152,10 @@ export const BatchQueue: React.FC<BatchQueueProps> = ({
                   setIsSelectionMode(!isSelectionMode);
                   setCheckedDocIds([]);
                 }}
-                className={`text-xs px-3 py-1.5 min-h-[38px] min-w-[64px] rounded-lg border shrink-0 tactile-btn ${
+                className={`text-xs px-3 py-1.5 min-h-[34px] min-w-[64px] rounded-md border shrink-0 tactile-btn ${
                   isSelectionMode
                     ? 'bg-purple-600 border-purple-500 text-white font-semibold'
-                    : 'bg-slate-800 border-slate-700 text-slate-300 hover:text-white'
+                    : 'bg-theme-card border-theme-subtle text-theme-secondary hover:text-theme-primary'
                 }`}
                 title="Çok sayfalı irsaliyeleri birleştirmek için seçin"
               >
@@ -167,7 +167,7 @@ export const BatchQueue: React.FC<BatchQueueProps> = ({
 
         {/* Çoklu Seçim Birleştirme Bildirim Çubuğu */}
         {isSelectionMode && (
-          <div className="bg-purple-950/40 border border-purple-500/30 rounded-lg p-2 flex items-center justify-between min-h-[44px] min-w-0">
+          <div className="bg-purple-950/40 border border-purple-500/30 rounded-lg p-2 flex items-center justify-between min-h-[40px] min-w-0">
             <span className="text-xs text-purple-300 font-medium truncate">
               {checkedDocIds.length} sayfa seçildi
             </span>
@@ -175,7 +175,7 @@ export const BatchQueue: React.FC<BatchQueueProps> = ({
               type="button"
               onClick={handleMergeAction}
               disabled={checkedDocIds.length < 2}
-              className="flex items-center space-x-1.5 bg-purple-600 hover:bg-purple-500 disabled:opacity-40 text-white px-3 py-1.5 min-h-[38px] rounded-lg text-xs font-semibold shadow-sm shrink-0 tactile-btn-purple"
+              className="flex items-center space-x-1.5 bg-purple-600 hover:bg-purple-500 disabled:opacity-40 text-white px-3 py-1.5 min-h-[34px] rounded-md text-xs font-semibold shadow-sm shrink-0 tactile-btn-purple"
             >
               <Merge className="w-3.5 h-3.5" />
               <span>Birleştir</span>
@@ -183,15 +183,18 @@ export const BatchQueue: React.FC<BatchQueueProps> = ({
           </div>
         )}
 
+        {/* Adaptif Yükleme Alanı: Liste doluyken kompakt şerit, azken ferah kutu */}
         <div
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
           onClick={() => fileInputRef.current?.click()}
-          className={`border-2 border-dashed rounded-lg p-3 text-center cursor-pointer transition-all active:scale-[0.99] min-w-0 ${
+          className={`border-2 border-dashed rounded-lg text-center cursor-pointer transition-all active:scale-[0.99] min-w-0 ${
+            safeDocs.length > 3 ? 'p-2' : 'p-3'
+          } ${
             isDragOver
               ? 'border-blue-500 bg-blue-500/10'
-              : 'border-slate-800 hover:border-slate-700 bg-slate-950/40 hover:bg-slate-950/60'
+              : 'border-theme-subtle hover:border-theme-strong bg-theme-card/30 hover:bg-theme-card/60'
           }`}
         >
           <input
@@ -202,22 +205,31 @@ export const BatchQueue: React.FC<BatchQueueProps> = ({
             className="hidden"
             onChange={handleFileInputChange}
           />
-          <div className="flex flex-col items-center justify-center space-y-1.5 py-0.5">
-            <div className="w-7 h-7 rounded-full bg-blue-500/10 text-blue-400 flex items-center justify-center">
-              <UploadCloud className="w-4 h-4" />
+          {safeDocs.length > 3 ? (
+            <div className="flex items-center justify-center space-x-2 py-0.5">
+              <UploadCloud className="w-4 h-4 text-blue-400 shrink-0" />
+              <p className="text-xs font-medium text-theme-secondary truncate">
+                Yeni Evrak Ekle veya Sürükle
+              </p>
             </div>
-            <p className="text-xs font-medium text-slate-300 truncate max-w-full">
-              Dosyaları buraya sürükleyin veya dokunun
-            </p>
-          </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center space-y-1.5 py-0.5">
+              <div className="w-7 h-7 rounded-full bg-blue-500/10 text-blue-400 flex items-center justify-center">
+                <UploadCloud className="w-4 h-4" />
+              </div>
+              <p className="text-xs font-medium text-theme-secondary truncate max-w-full">
+                Dosyaları buraya sürükleyin veya dokunun
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Tek Tıkla Örnek Belgeyi Yeniden Yükle */}
-        {onLoadDemo && (
+        {onLoadDemo && safeDocs.length <= 3 && (
           <button
             type="button"
             onClick={onLoadDemo}
-            className="w-full flex items-center justify-center space-x-1.5 py-2 px-3 min-h-[40px] rounded-lg border border-slate-800 bg-slate-950/50 hover:bg-slate-800 text-xs text-blue-400 hover:text-blue-300 font-medium shrink-0 tactile-btn"
+            className="w-full flex items-center justify-center space-x-1.5 py-1.5 px-3 min-h-[34px] rounded-md border border-theme-subtle bg-theme-card hover:bg-theme-card-hover text-xs text-blue-400 hover:text-blue-300 font-medium shrink-0 tactile-btn"
             title="Örnek sevk irsaliyesi görselini kuyruğa yükler"
           >
             <Sparkles className="w-3.5 h-3.5 text-blue-400 shrink-0" />
@@ -228,25 +240,25 @@ export const BatchQueue: React.FC<BatchQueueProps> = ({
         {safeDocs.length > 3 && (
           <div className="space-y-1.5 min-w-0">
             <div className="relative min-w-0">
-              <Search className="w-4 h-4 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
+              <Search className="w-4 h-4 text-theme-muted absolute left-2.5 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
                 placeholder="Ara (dosya adı, irsaliye no, ünvan)..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-9 pr-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 min-h-[38px]"
+                className="w-full bg-theme-card border border-theme-subtle rounded-md pl-9 pr-3 py-1.5 text-xs text-theme-primary placeholder-theme-muted focus:outline-none focus:border-blue-500 min-h-[34px]"
               />
             </div>
 
             {/* Linear Segmented Filter Pills (Tümü / İrsaliye / Uyumsuz) */}
-            <div className="flex items-center gap-1 p-0.5 bg-slate-950/70 border border-slate-800/80 rounded-lg text-[10px] font-medium">
+            <div className="flex items-center gap-1 p-0.5 bg-theme-card/60 border border-theme-subtle rounded-md text-[10px] font-medium">
               <button
                 type="button"
                 onClick={() => setFilterMode('all')}
                 className={`flex-1 py-1 px-1 rounded text-center transition-all ${
                   filterMode === 'all'
-                    ? 'bg-slate-800 text-white font-semibold shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200'
+                    ? 'bg-theme-card text-theme-primary font-semibold shadow-sm border border-theme-subtle'
+                    : 'text-theme-muted hover:text-theme-primary'
                 }`}
               >
                 Tümü ({safeDocs.length})
@@ -256,8 +268,8 @@ export const BatchQueue: React.FC<BatchQueueProps> = ({
                 onClick={() => setFilterMode('invoices')}
                 className={`flex-1 py-1 px-1 rounded text-center transition-all ${
                   filterMode === 'invoices'
-                    ? 'bg-blue-600/30 text-blue-300 font-semibold border border-blue-500/30'
-                    : 'text-slate-400 hover:text-slate-200'
+                    ? 'bg-blue-600/25 text-blue-300 font-semibold border border-blue-500/30'
+                    : 'text-theme-muted hover:text-theme-primary'
                 }`}
               >
                 İrsaliye ({invoiceCount})
@@ -267,8 +279,8 @@ export const BatchQueue: React.FC<BatchQueueProps> = ({
                 onClick={() => setFilterMode('non_invoices')}
                 className={`flex-1 py-1 px-1 rounded text-center transition-all ${
                   filterMode === 'non_invoices'
-                    ? 'bg-rose-600/30 text-rose-300 font-semibold border border-rose-500/30'
-                    : 'text-slate-400 hover:text-slate-200'
+                    ? 'bg-rose-600/25 text-rose-300 font-semibold border border-rose-500/30'
+                    : 'text-theme-muted hover:text-theme-primary'
                 }`}
               >
                 Uyumsuz ({nonInvoiceCount})
@@ -280,11 +292,11 @@ export const BatchQueue: React.FC<BatchQueueProps> = ({
 
       <div className="flex-1 overflow-y-auto p-2.5 space-y-2 overscroll-contain min-w-0">
         {filteredDocs.length === 0 ? (
-          <div className="h-48 flex flex-col items-center justify-center text-center p-4 text-slate-500">
+          <div className="h-48 flex flex-col items-center justify-center text-center p-4 text-theme-muted">
             {safeDocs.length === 0 ? (
               <>
-                <FolderDown className="w-7 h-7 text-slate-700/60 mb-1.5" />
-                <p className="text-xs font-medium text-slate-500 mb-2">Belge Bekleniyor</p>
+                <FolderDown className="w-7 h-7 text-theme-muted/50 mb-1.5" />
+                <p className="text-xs font-medium text-theme-muted mb-2">Belge Bekleniyor</p>
                 {onLoadDemo && (
                   <button
                     onClick={onLoadDemo}
@@ -296,8 +308,8 @@ export const BatchQueue: React.FC<BatchQueueProps> = ({
               </>
             ) : (
               <>
-                <AlertCircle className="w-5 h-5 text-slate-700/60 mb-1" />
-                <p className="text-xs text-slate-500">Kayıt Bulunamadı</p>
+                <AlertCircle className="w-5 h-5 text-theme-muted/50 mb-1" />
+                <p className="text-xs text-theme-muted">Kayıt Bulunamadı</p>
               </>
             )}
           </div>
@@ -325,7 +337,7 @@ export const BatchQueue: React.FC<BatchQueueProps> = ({
       </div>
 
       {safeDocs.length > 0 && (
-        <div className="p-2 border-t border-slate-800/80 bg-slate-950/40 text-[10px] text-slate-500 flex justify-between px-3 min-w-0">
+        <div className="p-2 border-t border-theme-subtle bg-theme-surface text-[10px] text-theme-muted flex justify-between px-3 min-w-0 font-mono tabular-nums">
           <span>Kuyruk: {safeSummary.kuyrukta ?? 0}</span>
           <span>Tamamlanan: {(safeSummary.tamamlanan || 0) + (safeSummary.onaylanan || 0)}</span>
         </div>
