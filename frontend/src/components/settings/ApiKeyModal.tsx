@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Settings, X, Check } from 'lucide-react';
 import { documentApi } from '../../services/api';
 
@@ -19,6 +19,15 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const timerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+      }
+    };
+  }, []);
 
   if (!isOpen) return null;
 
@@ -33,7 +42,8 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
     try {
       await documentApi.saveApiKey(apiKey.trim());
       setMessage('API anahtarı başarıyla kaydedildi.');
-      setTimeout(() => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+      timerRef.current = window.setTimeout(() => {
         onSaved();
         onClose();
       }, 750);
@@ -50,25 +60,25 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
 
   return (
     <div 
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 select-none"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="bg-slate-900 border border-slate-800 rounded-xl max-w-md w-full shadow-2xl overflow-hidden">
-        <div className="px-5 py-4 border-b border-slate-800 flex items-center justify-between">
-          <div className="flex items-center space-x-2.5">
-            <div className="w-8 h-8 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
+      <div className="bg-slate-900 border border-slate-800 rounded-xl max-w-md w-full shadow-2xl overflow-hidden min-w-0">
+        <div className="px-5 py-4 border-b border-slate-800 flex items-center justify-between min-w-0">
+          <div className="flex items-center space-x-2.5 min-w-0">
+            <div className="w-8 h-8 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 shrink-0">
               <Settings className="w-4 h-4" />
             </div>
-            <div>
-              <h2 className="text-sm font-semibold text-white">Sistem Ayarları</h2>
-              <p className="text-xs text-slate-400">API Yapılandırması</p>
+            <div className="min-w-0">
+              <h2 className="text-sm font-semibold text-white truncate">Sistem Ayarları</h2>
+              <p className="text-xs text-slate-400 truncate">API Yapılandırması</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="text-slate-400 hover:text-white p-1 rounded-md hover:bg-slate-800 transition-colors"
+            className="text-slate-400 hover:text-white p-1 rounded-md hover:bg-slate-800 transition-colors shrink-0"
           >
             <X className="w-4 h-4" />
           </button>
@@ -83,12 +93,12 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
           </div>
 
           <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <label className="text-xs font-medium text-slate-300">
+            <div className="flex items-center justify-between mb-1.5 gap-2 min-w-0">
+              <label className="text-xs font-medium text-slate-300 truncate">
                 API Anahtarı
               </label>
               {currentMaskedKey && (
-                <span className="text-[11px] font-mono text-slate-400">
+                <span className="text-[11px] font-mono text-slate-400 truncate shrink-0">
                   Mevcut: {currentMaskedKey}
                 </span>
               )}
@@ -105,13 +115,13 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
 
           {message && (
             <div className="flex items-center space-x-1.5 text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 p-2 rounded text-xs">
-              <Check className="w-3.5 h-3.5" />
+              <Check className="w-3.5 h-3.5 shrink-0" />
               <span>{message}</span>
             </div>
           )}
 
           {error && (
-            <div className="text-rose-400 bg-rose-500/10 border border-rose-500/20 p-2 rounded text-xs">
+            <div className="text-rose-400 bg-rose-500/10 border border-rose-500/20 p-2 rounded text-xs break-words">
               {error}
             </div>
           )}

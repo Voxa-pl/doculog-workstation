@@ -1,14 +1,35 @@
 import os
 import json
 import base64
+import socket
+import logging
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
+import httpx
 from PIL import Image
 from google import genai
-from google.genai import types
+from google.genai import types, errors
 
 from ..core.config import settings
 from ..models.irsaliye import IrsaliyeData, IrsaliyeHeader, LineItem
+
+logger = logging.getLogger(__name__)
+
+class GeminiRateLimitError(Exception):
+    """Gemini API kota aşımı veya 429 Rate Limit hatası"""
+    pass
+
+class GeminiTimeoutError(Exception):
+    """Gemini API ağ veya yanıt zaman aşımı hatası"""
+    pass
+
+class GeminiNetworkError(Exception):
+    """Gemini API ağ kopması / bağlantı hatası"""
+    pass
+
+class GeminiExtractionError(Exception):
+    """Gemini yanıt ayrıştırma veya şema uyumsuzluğu hatası"""
+    pass
 
 SYSTEM_PROMPT = """Sen Türkiye lojistik, ambar ve taşımacılık sektörü için uzmanlaşmış kıdemli bir 'Evrak ve Sevk İrsaliyesi Ayrıştırma Yapay Zekası'sın (Logistics Document Intelligence).
 
@@ -52,69 +73,147 @@ class GeminiExtractor:
             return None
         if self._client is None or self.api_key != key:
             self.api_key = key
-            self._client = genai.Client(api_key=key)
+            # Timeout 30000ms (30 saniye) ile yapılandırılır
+            self._client = genai.Client(
+                api_key=key,
+                http_options=types.HttpOptions(timeout=30000)
+            )
         return self._client
 
-    def extract_from_image(self, image_path: Path, mime_type: str = "image/jpeg") -> IrsaliyeData:
+    def extract_from_image(
+        self,
+        image_path: Path,
+        mime_type: str = "image/jpeg",
+        additional_pages: Optional[List[Path]] = None
+    ) -> IrsaliyeData:
         client = self.get_client()
 
         if client is None:
+            logger.info("Gemini API anahtarı tanımlı değil, gerçekçi simülasyon verisi üretiliyor.")
             return self._generate_realistic_fallback_data(image_path.name)
 
-        try:
-            with open(image_path, "rb") as f:
-                image_bytes = f.read()
+        if not image_path.exists():
+            raise FileNotFoundError(f"İşlenecek görsel dosyası bulunamadı: {image_path}")
 
-            image_part = types.Part.from_bytes(data=image_bytes, mime_type=mime_type)
+        try:
+            parts = []
+            with open(image_path, "rb") as f:
+                parts.append(types.Part.from_bytes(data=f.read(), mime_type=mime_type))
+
+            # Çoklu sayfa desteği
+            if additional_pages:
+                for add_page in additional_pages:
+                    if add_page and add_page.exists() and add_page != image_path:
+                        with open(add_page, "rb") as f_add:
+                            parts.append(types.Part.from_bytes(data=f_add.read(), mime_type="image/jpeg"))
+
             schema = IrsaliyeData.model_json_schema()
             prompt_text = (
                 f"{SYSTEM_PROMPT}\n\n"
-                "Lütfen bu sevk irsaliyesi görselindeki tüm başlık, cari, taşıma ve ürün kalemleri verilerini "
-                "yapılandırılmış JSON olarak çıkart."
+                "Lütfen bu sevk irsaliyesi görsel(ler)indeki tüm başlık, cari, taşıma ve ürün kalemleri verilerini "
+                "yapılandırılmış JSON olarak çıkart. Eğer birden fazla sayfa varsa tüm sayfalardaki kalemleri tek listede birleştir."
             )
+            parts.append(prompt_text)
 
-            # Model öncelik sırası: Yapılandırılan model, 3.5 Flash, 3.8 Flash, 3.5 Flash Lite
+            # Yalnızca Gemini 3.5 ve 3.6 serisi modeller (kullanıcı kısıtı)
             models_to_try = [
                 settings.GEMINI_MODEL,
                 "gemini-3.5-flash",
-                "gemini-3.8-flash",
                 "gemini-3.5-flash-lite",
+                "gemini-3.6-flash",
+                "gemini-3.6-flash-lite",
             ]
-            models_to_try = list(dict.fromkeys(models_to_try))
+            # Kesin kural: Sadece 3.5 ve 3.6 serisine ait modeller kabul edilir
+            models_to_try = [
+                m for m in dict.fromkeys(models_to_try)
+                if m and ("3.5" in m or "3.6" in m)
+            ]
 
-            last_error = None
-            output_text = None
+            last_error: Optional[Exception] = None
+            output_text: Optional[str] = None
 
             for model_name in models_to_try:
                 try:
                     response = client.models.generate_content(
                         model=model_name,
-                        contents=[image_part, prompt_text],
+                        contents=parts,
                         config=types.GenerateContentConfig(
                             response_mime_type="application/json",
                             response_json_schema=schema,
                         ),
                     )
-                    if response.text:
+                    if response and response.text:
                         output_text = response.text
                         break
+                except errors.APIError as api_err:
+                    last_error = api_err
+                    code = getattr(api_err, "code", None)
+                    err_msg = str(api_err).lower()
+                    if code == 429 or "429" in err_msg or "resource_exhausted" in err_msg or "quota" in err_msg:
+                        logger.warning(f"[{model_name}] Gemini API kota sınırı aşıldı (429 Rate Limit): {api_err}")
+                    else:
+                        logger.warning(f"[{model_name}] Gemini APIError ({code}): {api_err}")
+                    continue
+                except (httpx.TimeoutException, TimeoutError, socket.timeout) as timeout_err:
+                    last_error = timeout_err
+                    logger.warning(f"[{model_name}] Gemini API zaman aşımı (Timeout): {timeout_err}")
+                    continue
+                except (httpx.NetworkError, ConnectionError, OSError) as net_err:
+                    last_error = net_err
+                    logger.warning(f"[{model_name}] Gemini API ağ kopması / bağlantı hatası: {net_err}")
+                    continue
                 except Exception as ex:
-                    print(f"[{model_name}] denemesi başarısız oldu: {ex}")
                     last_error = ex
+                    logger.warning(f"[{model_name}] Beklenmeyen model hatası: {ex}")
                     continue
 
             if not output_text:
                 if last_error:
-                    print(f"[GeminiExtractor] Tüm API modelleri başarısız oldu, gerçekçi demo verisine geçiliyor: {last_error}")
-                return self._generate_realistic_fallback_data(image_path.name)
+                    err_str = str(last_error).lower()
+                    code = getattr(last_error, "code", None)
+                    if code == 429 or "429" in err_str or "resource_exhausted" in err_str or "quota" in err_str:
+                        raise GeminiRateLimitError(
+                            f"Gemini API kota sınırı aşıldı (429 Rate Limit / Quota Exceeded). Lütfen bir süre sonra tekrar deneyin."
+                        )
+                    elif isinstance(last_error, (httpx.TimeoutException, TimeoutError, socket.timeout)) or "timeout" in err_str:
+                        raise GeminiTimeoutError(
+                            f"Gemini API sunucusundan yanıt zaman aşımına uğradı (Timeout 30s). Ağ durumunu kontrol edin."
+                        )
+                    elif isinstance(last_error, (httpx.NetworkError, ConnectionError, OSError)) or "connection" in err_str:
+                        raise GeminiNetworkError(
+                            f"Gemini API sunucusuna ulaşılamadı (Network Error / Ağ Kopması). İnternet bağlantınızı kontrol edin."
+                        )
+                    else:
+                        raise RuntimeError(f"Gemini API çağrı hatası: {last_error}")
+                raise RuntimeError("Yapay zeka modelinden herhangi bir metin yanıtı alınamadı.")
 
-            data_dict = json.loads(output_text)
-            return IrsaliyeData.model_validate(data_dict)
+            # Markdown kod bloklarını (```json ... ```) temizle
+            clean_text = output_text.strip()
+            if clean_text.startswith("```"):
+                lines = clean_text.splitlines()
+                if lines and lines[0].startswith("```"):
+                    lines = lines[1:]
+                if lines and lines[-1].strip() == "```":
+                    lines = lines[:-1]
+                clean_text = "\n".join(lines).strip()
 
+            try:
+                data_dict = json.loads(clean_text)
+            except json.JSONDecodeError as jde:
+                logger.error(f"Gemini yanıtı geçerli JSON formatında değil: {jde}\nİçerik: {clean_text[:200]}")
+                raise GeminiExtractionError(f"Model geçerli bir JSON çıktısı üretemedi: {jde}")
+
+            try:
+                return IrsaliyeData.model_validate(data_dict)
+            except Exception as val_err:
+                logger.error(f"Ayrıştırılan JSON şemaya uymadı: {val_err}")
+                raise GeminiExtractionError(f"Ayrıştırılan veri irsaliye şemasına uymuyor: {val_err}")
+
+        except (GeminiRateLimitError, GeminiTimeoutError, GeminiNetworkError, GeminiExtractionError, FileNotFoundError):
+            raise
         except Exception as e:
-            print(f"[GeminiExtractor HATA] {image_path.name} ayrıştırılamadı: {e}")
-            return self._generate_realistic_fallback_data(image_path.name)
-
+            logger.error(f"[GeminiExtractor HATA] {image_path.name} ayrıştırılırken beklenmeyen istisna: {e}")
+            raise
 
     def _generate_realistic_fallback_data(self, filename: str) -> IrsaliyeData:
         return IrsaliyeData(

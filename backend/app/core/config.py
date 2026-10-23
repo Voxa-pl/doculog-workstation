@@ -32,18 +32,38 @@ class Settings:
 
     # Dosya Yükleme Kısıtları
     ALLOWED_EXTENSIONS: set = {"jpg", "jpeg", "png", "webp", "pdf", "tif", "tiff"}
+    ALLOWED_MIME_TYPES: set = {
+        "image/jpeg",
+        "image/png",
+        "image/webp",
+        "application/pdf",
+        "image/tiff",
+    }
     MAX_FILE_SIZE_MB: int = 30
 
+    # WebSocket Güvenlik Kısıtları
+    WS_MAX_TOTAL_CONNECTIONS: int = 100
+    WS_MAX_CONNECTIONS_PER_SESSION: int = 20
+    WS_MAX_CONNECTIONS_PER_IP: int = 30
+    WS_RATE_LIMIT_BURST: int = 25
+    WS_RATE_LIMIT_WINDOW_SECONDS: float = 5.0
+
     # CORS Ayarları
-    CORS_ORIGINS: list = [
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-        "http://localhost:8000",
-        "http://127.0.0.1:8000",
-        "*",
-    ]
+    @property
+    def CORS_ORIGINS(self) -> list:
+        cors_env = os.getenv("CORS_ORIGINS", "").strip()
+        if cors_env:
+            return [o.strip() for o in cors_env.split(",") if o.strip()]
+        
+        # Güvenli CORS kökenleri (Production ve Development) - ASLA wildcard '*' içermez
+        return [
+            "http://localhost:5173",
+            "http://127.0.0.1:5173",
+            "http://localhost:3000",
+            "http://127.0.0.1:3000",
+            "http://localhost:8000",
+            "http://127.0.0.1:8000",
+        ]
 
     def __init__(self):
         # Klasörleri otomatik oluştur (Vercel /tmp uyumlu)

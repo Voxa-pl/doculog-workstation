@@ -7,9 +7,7 @@ import {
   Check, 
   Loader2, 
   Wifi, 
-  CheckCircle2, 
-  Sparkles,
-  ExternalLink 
+  CheckCircle2
 } from 'lucide-react';
 import { QrBridgeInfo, DocumentItem } from '../../types/irsaliye';
 import { documentApi } from '../../services/api';
@@ -34,17 +32,39 @@ export const QrBridgeModal: React.FC<QrBridgeModalProps> = ({
 
   const wsRef = useRef<WebSocket | null>(null);
   const pingIntervalRef = useRef<number | null>(null);
+  const autoCloseTimerRef = useRef<number | null>(null);
+  const copyTimerRef = useRef<number | null>(null);
+
+  const cleanupSocketAndTimers = () => {
+    if (autoCloseTimerRef.current) {
+      clearTimeout(autoCloseTimerRef.current);
+      autoCloseTimerRef.current = null;
+    }
+    if (copyTimerRef.current) {
+      clearTimeout(copyTimerRef.current);
+      copyTimerRef.current = null;
+    }
+    if (pingIntervalRef.current) {
+      clearInterval(pingIntervalRef.current);
+      pingIntervalRef.current = null;
+    }
+    if (wsRef.current) {
+      try {
+        wsRef.current.onopen = null;
+        wsRef.current.onmessage = null;
+        wsRef.current.onerror = null;
+        wsRef.current.onclose = null;
+        wsRef.current.close();
+      } catch (e) {
+        // Ignore
+      }
+      wsRef.current = null;
+    }
+  };
 
   useEffect(() => {
     if (!isOpen) {
-      if (wsRef.current) {
-        wsRef.current.close();
-        wsRef.current = null;
-      }
-      if (pingIntervalRef.current) {
-        clearInterval(pingIntervalRef.current);
-        pingIntervalRef.current = null;
-      }
+      cleanupSocketAndTimers();
       setIsSuccess(false);
       setQrInfo(null);
       return;
@@ -68,7 +88,10 @@ export const QrBridgeModal: React.FC<QrBridgeModalProps> = ({
         wsRef.current = ws;
 
         ws.onopen = () => {
-          // Canlı tutma sinyali (ping-pong)
+          if (!isSubscribed) return;
+          if (pingIntervalRef.current) {
+            clearInterval(pingIntervalRef.current);
+          }
           pingIntervalRef.current = window.setInterval(() => {
             if (ws.readyState === WebSocket.OPEN) {
               ws.send('ping');
@@ -77,6 +100,7 @@ export const QrBridgeModal: React.FC<QrBridgeModalProps> = ({
         };
 
         ws.onmessage = (event) => {
+          if (!isSubscribed) return;
           try {
             if (event.data === 'pong') return;
             const data = JSON.parse(event.data);
@@ -85,9 +109,12 @@ export const QrBridgeModal: React.FC<QrBridgeModalProps> = ({
               setReceivedDocName(data.document.dosya_adi || 'Mobil İrsaliye');
               onDocumentReceived(data.document);
 
-              // 1.4 saniye sonra pencereyi otomatik ve şık bir şekilde kapat
-              setTimeout(() => {
-                onClose();
+              // 1.4 saniye sonra pencereyi otomatik ve güvenli bir şekilde kapat
+              if (autoCloseTimerRef.current) clearTimeout(autoCloseTimerRef.current);
+              autoCloseTimerRef.current = window.setTimeout(() => {
+                if (isSubscribed) {
+                  onClose();
+                }
               }, 1400);
             }
           } catch (e) {
@@ -96,6 +123,7 @@ export const QrBridgeModal: React.FC<QrBridgeModalProps> = ({
         };
 
         ws.onerror = (err) => {
+          if (!isSubscribed) return;
           console.warn('WebSocket bağlantı uyarısı:', err);
         };
       } catch (err) {
@@ -110,16 +138,9 @@ export const QrBridgeModal: React.FC<QrBridgeModalProps> = ({
 
     return () => {
       isSubscribed = false;
-      if (wsRef.current) {
-        wsRef.current.close();
-        wsRef.current = null;
-      }
-      if (pingIntervalRef.current) {
-        clearInterval(pingIntervalRef.current);
-        pingIntervalRef.current = null;
-      }
+      cleanupSocketAndTimers();
     };
-  }, [isOpen]);
+  }, [isOpen, onClose, onDocumentReceived]);
 
   if (!isOpen) return null;
 
@@ -127,38 +148,39 @@ export const QrBridgeModal: React.FC<QrBridgeModalProps> = ({
     if (!qrInfo) return;
     navigator.clipboard.writeText(qrInfo.mobile_url);
     setIsCopied(true);
-    setTimeout(() => setIsCopied(false), 2000);
+    if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+    copyTimerRef.current = window.setTimeout(() => setIsCopied(false), 2000);
   };
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 select-none">
       <div 
-        className="bg-slate-900 border border-slate-800 rounded-2xl max-w-sm w-full shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150"
+        className="bg-slate-900 border border-slate-800 rounded-2xl max-w-sm w-full shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150 min-w-0"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Üst Başlık */}
-        <div className="p-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/40">
-          <div className="flex items-center space-x-2.5">
-            <div className="w-8 h-8 rounded-lg bg-blue-600/20 text-blue-400 border border-blue-500/30 flex items-center justify-center">
+        <div className="p-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/40 min-w-0">
+          <div className="flex items-center space-x-2.5 min-w-0">
+            <div className="w-8 h-8 rounded-lg bg-blue-600/20 text-blue-400 border border-blue-500/30 flex items-center justify-center shrink-0">
               <Smartphone className="w-4 h-4" />
             </div>
-            <div>
-              <h3 className="text-xs font-semibold text-white tracking-wide">
+            <div className="min-w-0">
+              <h3 className="text-xs font-semibold text-white tracking-wide truncate">
                 Telefondan Canlı Yükleme
               </h3>
-              <p className="text-[10px] text-slate-400">Mobile QR Bridge</p>
+              <p className="text-[10px] text-slate-400 truncate">Mobile QR Bridge</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="text-slate-400 hover:text-white p-1 rounded-md hover:bg-slate-800 transition-colors"
+            className="text-slate-400 hover:text-white p-1 rounded-md hover:bg-slate-800 transition-colors shrink-0"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Gövde */}
-        <div className="p-5 flex flex-col items-center text-center">
+        <div className="p-5 flex flex-col items-center text-center min-w-0">
           {isLoading ? (
             <div className="py-12 flex flex-col items-center justify-center space-y-3">
               <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
@@ -180,7 +202,7 @@ export const QrBridgeModal: React.FC<QrBridgeModalProps> = ({
                 <CheckCircle2 className="w-8 h-8" />
               </div>
               <h4 className="text-sm font-bold text-white">İrsaliye Başarıyla Aktarıldı!</h4>
-              <p className="text-xs text-slate-300 max-w-xs">
+              <p className="text-xs text-slate-300 max-w-xs break-words">
                 <span className="text-emerald-400 font-semibold">{receivedDocName}</span> ayrıştırma masasına aktarıldı.
               </p>
             </div>
@@ -208,10 +230,10 @@ export const QrBridgeModal: React.FC<QrBridgeModalProps> = ({
               </div>
 
               {/* URL ve Kopyala Butonu */}
-              <div className="w-full mt-3 bg-slate-950 border border-slate-800 rounded-lg p-2 flex items-center justify-between text-left">
-                <div className="truncate mr-2">
-                  <div className="text-[10px] text-slate-500 font-medium uppercase">Yerel Ağ Adresi (LAN)</div>
-                  <div className="text-xs font-mono text-slate-300 truncate">
+              <div className="w-full mt-3 bg-slate-950 border border-slate-800 rounded-lg p-2 flex items-center justify-between text-left min-w-0">
+                <div className="truncate mr-2 min-w-0 flex-1">
+                  <div className="text-[10px] text-slate-500 font-medium uppercase truncate">Yerel Ağ Adresi (LAN)</div>
+                  <div className="text-xs font-mono text-slate-300 truncate" title={qrInfo?.mobile_url || ''}>
                     {qrInfo?.mobile_url}
                   </div>
                 </div>
@@ -254,12 +276,12 @@ export const QrBridgeModal: React.FC<QrBridgeModalProps> = ({
         </div>
 
         {/* Alt Bilgi */}
-        <div className="px-5 py-2.5 bg-slate-950/60 border-t border-slate-800/80 flex items-center justify-between text-[10px] text-slate-500">
-          <div className="flex items-center space-x-1">
-            <Wifi className="w-3 h-3 text-slate-400" />
-            <span>Aynı Wi-Fi ağına bağlı olmalıdır</span>
+        <div className="px-5 py-2.5 bg-slate-950/60 border-t border-slate-800/80 flex items-center justify-between text-[10px] text-slate-500 min-w-0">
+          <div className="flex items-center space-x-1 truncate min-w-0">
+            <Wifi className="w-3 h-3 text-slate-400 shrink-0" />
+            <span className="truncate">Aynı Wi-Fi ağına bağlı olmalıdır</span>
           </div>
-          <span>IP: {qrInfo?.lan_ip || '...'}</span>
+          <span className="shrink-0 font-mono">IP: {qrInfo?.lan_ip || '...'}</span>
         </div>
       </div>
     </div>

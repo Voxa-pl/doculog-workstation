@@ -59,8 +59,8 @@ export const documentApi = {
   },
 
 
-  rotateDocument: async (id: string, derece: number = 90): Promise<DocumentItem> => {
-    const res = await api.post<DocumentItem>(`/documents/${id}/rotate`, { derece });
+  rotateDocument: async (id: string, derece: number = 90, sayfa_indeksi: number = 0): Promise<DocumentItem> => {
+    const res = await api.post<DocumentItem>(`/documents/${id}/rotate`, { derece, sayfa_indeksi });
     return res.data;
   },
 

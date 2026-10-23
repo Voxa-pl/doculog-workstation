@@ -1,16 +1,19 @@
 import os
+import re
 import uuid
 import shutil
 from pathlib import Path
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Tuple
 from datetime import datetime
-from fastapi import APIRouter, UploadFile, File, Form, WebSocket, WebSocketDisconnect, HTTPException
+import asyncio
+from fastapi import APIRouter, UploadFile, File, Form, WebSocket, WebSocketDisconnect, HTTPException, BackgroundTasks
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from ..core.config import settings
 from ..services.network import get_lan_ip, generate_qr_base64
 from ..services.connection_manager import ws_manager
+from ..services.document_repo import doc_repo
 from ..models.irsaliye import (
     DocumentItem,
     ProcessingStatus,
@@ -26,25 +29,21 @@ from ..models.batch import (
 )
 from ..models.analytics import AnalyticsResponse
 from ..services.analytics_service import analytics_service
-from ..services.gemini_extractor import gemini_extractor
+from ..services.gemini_extractor import (
+    gemini_extractor,
+    GeminiRateLimitError,
+    GeminiTimeoutError,
+    GeminiNetworkError,
+    GeminiExtractionError
+)
 from ..services.image_processor import image_processor
 from ..services.excel_exporter import excel_exporter
 from ..services.erp_exporter import erp_exporter
 
 router = APIRouter()
 
-DOCUMENT_STORE: Dict[str, DocumentItem] = {}
-
 def get_batch_summary() -> BatchSummary:
-    docs = list(DOCUMENT_STORE.values())
-    return BatchSummary(
-        toplam_belge=len(docs),
-        kuyrukta=sum(1 for d in docs if d.durum == ProcessingStatus.KUYRUKTA),
-        islenen=sum(1 for d in docs if d.durum == ProcessingStatus.ISLENIYOR),
-        tamamlanan=sum(1 for d in docs if d.durum == ProcessingStatus.TAMAMLANDI),
-        hatali=sum(1 for d in docs if d.durum == ProcessingStatus.HATA),
-        onaylanan=sum(1 for d in docs if d.durum == ProcessingStatus.ONAYLANDI),
-    )
+    return doc_repo.get_summary()
 
 @router.get("/health")
 async def health_check():
@@ -52,50 +51,203 @@ async def health_check():
         "sistem": settings.PROJECT_NAME,
         "versiyon": settings.VERSION,
         "durum": "calisiyor",
-        "model": settings.GEMINI_MODEL
+        "motor": "DocuLog OCR Engine v1.0"
     }
 
 @router.get("/documents", response_model=QueueResponse)
 async def list_documents():
     return QueueResponse(
-        documents=list(DOCUMENT_STORE.values()),
-        summary=get_batch_summary()
+        documents=doc_repo.get_all(),
+        summary=doc_repo.get_summary()
     )
+
+MAGIC_BYTES = {
+    "jpg": [b"\xff\xd8\xff"],
+    "jpeg": [b"\xff\xd8\xff"],
+    "png": [b"\x89PNG\r\n\x1a\n"],
+    "webp": [b"RIFF"],
+    "pdf": [b"%PDF-"],
+    "tif": [b"II*\x00", b"MM\x00*"],
+    "tiff": [b"II*\x00", b"MM\x00*"],
+}
+
+MIME_TYPE_MAP = {
+    "jpg": "image/jpeg",
+    "jpeg": "image/jpeg",
+    "png": "image/png",
+    "webp": "image/webp",
+    "pdf": "application/pdf",
+    "tif": "image/tiff",
+    "tiff": "image/tiff",
+}
+
+async def save_and_validate_upload(
+    upload_file: UploadFile,
+    custom_prefix: Optional[str] = None,
+    doc_id: Optional[str] = None
+) -> Tuple[str, Path, str, int, str]:
+    """
+    Güvenli dosya yükleme doğrulaması ve kaydı (CWE-22, CWE-434, CWE-400):
+    1. Path traversal temizliği (Path(filename).name)
+    2. İzin verilen uzantı kontrolü (ALLOWED_EXTENSIONS)
+    3. Tehlikeli MIME türü engeli ve Magic Bytes imza doğrulaması (MIME spoofing koruması)
+    4. UUID ve güvenli dosya adı sanitizasyonu
+    5. Boyut sınırı kontrolü (MAX_FILE_SIZE_MB ile DoS / bellek tüketimi engeli)
+    6. Dizin sınır kontrolü (UPLOAD_DIR dışına çıkış engeli)
+    """
+    if not upload_file or not upload_file.filename:
+        raise HTTPException(status_code=400, detail="Dosya veya dosya adı bulunamadı.")
+
+    # 1. Path traversal temizliği
+    clean_display_name = Path(upload_file.filename).name.replace("\x00", "").strip()
+    if not clean_display_name or clean_display_name in (".", ".."):
+        raise HTTPException(status_code=400, detail="Geçersiz dosya adı.")
+
+    # 2. Uzantı kontrolü
+    parts = clean_display_name.rsplit(".", 1)
+    if len(parts) < 2 or not parts[1]:
+        raise HTTPException(status_code=400, detail="Dosya uzantısı eksik veya geçersiz.")
+    ext = parts[1].lower().strip()
+
+    if ext not in settings.ALLOWED_EXTENSIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Desteklenmeyen dosya türü: .{ext}. İzin verilenler: {', '.join(sorted(settings.ALLOWED_EXTENSIONS))}"
+        )
+
+    # 3. MIME Türü kontrolü
+    expected_mime = MIME_TYPE_MAP.get(ext, "image/jpeg")
+    content_type = (upload_file.content_type or "").lower().strip()
+    dangerous_mimes = {
+        "application/x-php", "text/html", "application/javascript",
+        "application/x-sh", "application/x-msdos-program", "text/x-python",
+        "application/x-executable"
+    }
+    if content_type in dangerous_mimes:
+        raise HTTPException(status_code=400, detail=f"Güvenlik ihlali: Tehlikeli dosya içeriği tespit edildi ({content_type}).")
+
+    # 4. UUID ve güvenli dosya adı oluşturma
+    assigned_id = doc_id or str(uuid.uuid4())
+    safe_stem = re.sub(r"[^a-zA-Z0-9_\-]", "_", Path(clean_display_name).stem)[:40] or "file"
+    if custom_prefix:
+        safe_filename = f"{custom_prefix}_{safe_stem}.{ext}"
+    else:
+        safe_filename = f"{assigned_id}_{safe_stem}.{ext}"
+
+    # Dizin sınırı kontrolü
+    target_path = (settings.UPLOAD_DIR / safe_filename).resolve()
+    upload_dir_resolved = settings.UPLOAD_DIR.resolve()
+    if not target_path.is_relative_to(upload_dir_resolved):
+        raise HTTPException(status_code=400, detail="Güvenlik ihlali: Dosya yolu izin verilen sınırların dışına çıkamaz.")
+
+    # 5. Boyut sınırı ve akış denetimi (DoS koruması)
+    max_bytes = settings.MAX_FILE_SIZE_MB * 1024 * 1024
+    total_bytes = 0
+    header_bytes = b""
+    chunk_size = 64 * 1024  # 64 KB
+
+    try:
+        with open(target_path, "wb") as buffer:
+            while chunk := await upload_file.read(chunk_size):
+                total_bytes += len(chunk)
+                if total_bytes > max_bytes:
+                    buffer.close()
+                    if target_path.exists():
+                        target_path.unlink()
+                    raise HTTPException(
+                        status_code=413,
+                        detail=f"Dosya boyutu çok büyük. Maksimum izin verilen sınır: {settings.MAX_FILE_SIZE_MB}MB"
+                    )
+                if len(header_bytes) < 32:
+                    header_bytes += chunk[:32 - len(header_bytes)]
+                buffer.write(chunk)
+    except HTTPException:
+        raise
+    except Exception as e:
+        if target_path.exists():
+            target_path.unlink()
+        raise HTTPException(status_code=500, detail=f"Dosya kaydedilemedi: {e}")
+    finally:
+        try:
+            upload_file.file.close()
+        except Exception:
+            pass
+
+    # Boş dosya kontrolü
+    if total_bytes == 0:
+        if target_path.exists():
+            target_path.unlink()
+        raise HTTPException(status_code=400, detail="Boş dosya yüklenemez.")
+
+    # 6. Magic Bytes doğrulaması (MIME spoofing önleme)
+    magic_sigs = MAGIC_BYTES.get(ext, [])
+    is_valid_magic = False
+    if ext == "webp":
+        is_valid_magic = header_bytes.startswith(b"RIFF") and len(header_bytes) >= 12 and header_bytes[8:12] == b"WEBP"
+    else:
+        is_valid_magic = any(header_bytes.startswith(sig) for sig in magic_sigs)
+
+    if not is_valid_magic:
+        if target_path.exists():
+            target_path.unlink()
+        raise HTTPException(
+            status_code=400,
+            detail=f"Dosya içeriği ve uzantısı (.{ext}) uyuşmuyor (sahte veya geçersiz dosya biçimi)."
+        )
+
+    return assigned_id, target_path, safe_filename, total_bytes, clean_display_name
 
 @router.post("/upload", response_model=List[DocumentItem])
 async def upload_documents(files: List[UploadFile] = File(...)):
+    if not files:
+        raise HTTPException(status_code=400, detail="Hiçbir dosya gönderilmedi.")
+
     uploaded_items: List[DocumentItem] = []
 
     for file in files:
-        ext = file.filename.split(".")[-1].lower() if "." in file.filename else "jpg"
-        if ext not in settings.ALLOWED_EXTENSIONS:
+        try:
+            doc_id, file_path, safe_filename, file_size, clean_name = await save_and_validate_upload(file)
+        except HTTPException:
+            if len(files) == 1:
+                raise
             continue
 
-        doc_id = str(uuid.uuid4())
-        safe_filename = f"{doc_id}_{file.filename}"
-        file_path = settings.UPLOAD_DIR / safe_filename
+        # Yüklenen görselin EXIF oryantasyonunu hemen normalize et
+        image_processor.normalize_image(file_path)
         thumb_path = settings.UPLOAD_DIR / f"thumb_{doc_id}.jpg"
-
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-
         image_processor.generate_thumbnail(file_path, thumb_path)
+
+        ext = file_path.suffix.lstrip(".").lower()
+        mime_type = MIME_TYPE_MAP.get(ext, "image/jpeg")
+        now_ts = int(datetime.now().timestamp() * 1000)
 
         doc_item = DocumentItem(
             id=doc_id,
-            dosya_adi=file.filename,
+            dosya_adi=clean_name,
             dosya_yolu=str(file_path),
             dosya_url=f"/uploads/{safe_filename}",
-            mime_type=file.content_type or f"image/{ext}",
-            boyut_bytes=os.path.getsize(file_path),
+            mime_type=mime_type,
+            boyut_bytes=file_size,
             yuklenme_tarihi=datetime.now().strftime("%d.%m.%Y %H:%M"),
             donus_acisi=0,
             durum=ProcessingStatus.KUYRUKTA,
             sayfalar=[f"/uploads/{safe_filename}"],
+            guncellenme_ts=now_ts
         )
 
-        DOCUMENT_STORE[doc_id] = doc_item
+        doc_repo.save(doc_item)
         uploaded_items.append(doc_item)
+
+    if not uploaded_items and files:
+        raise HTTPException(status_code=400, detail="Geçerli veya desteklenen bir dosya yüklenemedi.")
+
+    if uploaded_items:
+        await ws_manager.broadcast_all({
+            "type": "DOCUMENTS_UPDATED",
+            "action": "upload",
+            "count": len(uploaded_items),
+            "document_ids": [d.id for d in uploaded_items]
+        })
 
     return uploaded_items
 
@@ -113,7 +265,6 @@ async def load_demo_document():
     shutil.copyfile(demo_sample_path, file_path)
     image_processor.generate_thumbnail(file_path, thumb_path)
 
-    # Demo verisini anında hazır etmek için Gemini veya hızlı fallback verisini çıkart
     try:
         data = gemini_extractor.extract_from_image(file_path, "image/jpeg")
     except Exception:
@@ -125,87 +276,168 @@ async def load_demo_document():
         dosya_yolu=str(file_path),
         dosya_url=f"/uploads/{safe_filename}",
         mime_type="image/jpeg",
-        boyut_bytes=os.path.getsize(file_path),
+        boyut_bytes=os.path.getsize(file_path) if file_path.exists() else (os.path.getsize(demo_sample_path) if demo_sample_path.exists() else 0),
         yuklenme_tarihi=datetime.now().strftime("%d.%m.%Y %H:%M"),
         donus_acisi=0,
         durum=ProcessingStatus.TAMAMLANDI,
         veri=data,
         sayfalar=[f"/uploads/{safe_filename}"],
+        guncellenme_ts=int(datetime.now().timestamp() * 1000)
     )
 
-    DOCUMENT_STORE[doc_id] = doc_item
+    doc_repo.save(doc_item)
+    await ws_manager.broadcast_all({
+        "type": "DOCUMENTS_UPDATED",
+        "action": "demo_load",
+        "document_id": doc_id
+    })
     return doc_item
-
 
 @router.get("/documents/{doc_id}", response_model=DocumentItem)
 async def get_document(doc_id: str):
-    if doc_id not in DOCUMENT_STORE:
+    doc = doc_repo.get_by_id(doc_id)
+    if not doc:
         raise HTTPException(status_code=404, detail="Belge bulunamadı.")
-    return DOCUMENT_STORE[doc_id]
+    return doc
 
-@router.post("/documents/{doc_id}/process", response_model=DocumentItem)
-async def process_document(doc_id: str):
-    if doc_id not in DOCUMENT_STORE:
-        raise HTTPException(status_code=404, detail="Belge bulunamadı.")
-
-    doc = DOCUMENT_STORE[doc_id]
-    doc.durum = ProcessingStatus.ISLENIYOR
-
+def _run_ai_extraction(doc_id: str):
+    doc = doc_repo.get_by_id(doc_id)
+    if not doc:
+        return
     try:
+        add_pages = []
+        if doc.sayfalar and len(doc.sayfalar) > 1:
+            for p_url in doc.sayfalar[1:]:
+                fname = p_url.split("/")[-1]
+                add_pages.append(settings.UPLOAD_DIR / fname)
+
         extracted_data = gemini_extractor.extract_from_image(
             image_path=Path(doc.dosya_yolu),
-            mime_type=doc.mime_type
+            mime_type=doc.mime_type,
+            additional_pages=add_pages
         )
         doc.veri = extracted_data
         doc.durum = ProcessingStatus.TAMAMLANDI
         doc.hata_mesaji = None
+    except GeminiRateLimitError as rle:
+        doc.durum = ProcessingStatus.HATA
+        doc.hata_mesaji = f"Kota Sınırı (429 Rate Limit): {rle}"
+        print(f"[Gemini KOTA AŞIMI] Belge {doc_id}: {rle}")
+    except GeminiTimeoutError as te:
+        doc.durum = ProcessingStatus.HATA
+        doc.hata_mesaji = f"Zaman Aşımı (Timeout): {te}"
+        print(f"[Gemini ZAMAN AŞIMI] Belge {doc_id}: {te}")
+    except GeminiNetworkError as ne:
+        doc.durum = ProcessingStatus.HATA
+        doc.hata_mesaji = f"Ağ Bağlantı Kopması: {ne}"
+        print(f"[Gemini AĞ HATASI] Belge {doc_id}: {ne}")
+    except GeminiExtractionError as ee:
+        doc.durum = ProcessingStatus.HATA
+        doc.hata_mesaji = f"Ayrıştırma / Format Hatası: {ee}"
+        print(f"[Gemini FORMAT HATASI] Belge {doc_id}: {ee}")
     except Exception as e:
         doc.durum = ProcessingStatus.HATA
         doc.hata_mesaji = str(e)
+        print(f"[Gemini GENEL HATA] Belge {doc_id}: {e}")
 
-    DOCUMENT_STORE[doc_id] = doc
-    return doc
+    try:
+        doc_repo.save(doc)
+    except Exception as save_err:
+        print(f"[DocumentRepo HATA] Belge {doc_id} durumu kaydedilemedi: {save_err}")
+
+    try:
+        ws_manager.broadcast_all_sync({
+            "type": "DOCUMENTS_UPDATED",
+            "action": "process_completed",
+            "document_id": doc_id,
+            "durum": doc.durum.value if hasattr(doc.durum, "value") else str(doc.durum)
+        })
+    except Exception as ws_err:
+        print(f"[WebSocket HATA] process_completed bildirimi gönderilemedi: {ws_err}")
+
+@router.post("/documents/{doc_id}/process", response_model=DocumentItem)
+async def process_document(doc_id: str):
+    doc = doc_repo.get_by_id(doc_id)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Belge bulunamadı.")
+
+    doc.durum = ProcessingStatus.ISLENIYOR
+    doc_repo.save(doc)
+    await ws_manager.broadcast_all({
+        "type": "DOCUMENTS_UPDATED",
+        "action": "process_started",
+        "document_id": doc_id,
+        "durum": ProcessingStatus.ISLENIYOR.value
+    })
+
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, _run_ai_extraction, doc_id)
+
+    return doc_repo.get_by_id(doc_id)
 
 @router.post("/batch/process-all")
-async def process_all_documents():
-    results = []
-    for doc_id, doc in list(DOCUMENT_STORE.items()):
-        if doc.durum in (ProcessingStatus.KUYRUKTA, ProcessingStatus.HATA):
-            doc.durum = ProcessingStatus.ISLENIYOR
-            try:
-                data = gemini_extractor.extract_from_image(Path(doc.dosya_yolu), doc.mime_type)
-                doc.veri = data
-                doc.durum = ProcessingStatus.TAMAMLANDI
-                doc.hata_mesaji = None
-            except Exception as e:
-                doc.durum = ProcessingStatus.HATA
-                doc.hata_mesaji = str(e)
-            DOCUMENT_STORE[doc_id] = doc
-            results.append(doc)
-    return {"mesaj": "Toplu işlem tamamlandı", "islenen_adet": len(results)}
+async def process_all_documents(background_tasks: BackgroundTasks):
+    docs = doc_repo.get_all()
+    to_process = [d for d in docs if d.durum in (ProcessingStatus.KUYRUKTA, ProcessingStatus.HATA)]
+    for doc in to_process:
+        doc.durum = ProcessingStatus.ISLENIYOR
+        doc_repo.save(doc)
+        background_tasks.add_task(_run_ai_extraction, doc.id)
+    if to_process:
+        await ws_manager.broadcast_all({
+            "type": "DOCUMENTS_UPDATED",
+            "action": "batch_process_started",
+            "count": len(to_process)
+        })
+    return {"mesaj": "Toplu işlem başlatıldı", "islenen_adet": len(to_process)}
 
 @router.post("/documents/{doc_id}/rotate", response_model=DocumentItem)
 async def rotate_document(doc_id: str, req: RotateRequest):
-    if doc_id not in DOCUMENT_STORE:
+    doc = doc_repo.get_by_id(doc_id)
+    if not doc:
         raise HTTPException(status_code=404, detail="Belge bulunamadı.")
 
-    doc = DOCUMENT_STORE[doc_id]
     file_path = Path(doc.dosya_yolu)
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Evrak görseli diskte bulunamadı.")
+
+    target_file = file_path
+    if req.sayfa_indeksi and req.sayfa_indeksi > 0 and doc.sayfalar and req.sayfa_indeksi < len(doc.sayfalar):
+        page_url = doc.sayfalar[req.sayfa_indeksi]
+        filename = page_url.split("/")[-1].split("?")[0]
+        page_path = settings.UPLOAD_DIR / filename
+        if page_path.exists():
+            target_file = page_path
+
     thumb_path = settings.UPLOAD_DIR / f"thumb_{doc_id}.jpg"
 
-    image_processor.rotate_image(file_path, req.derece)
-    image_processor.generate_thumbnail(file_path, thumb_path)
+    image_processor.rotate_image(target_file, req.derece)
+    if target_file == file_path:
+        image_processor.generate_thumbnail(file_path, thumb_path)
 
-    doc.donus_acisi = (doc.donus_acisi + req.derece) % 360
-    DOCUMENT_STORE[doc_id] = doc
+    now_ts = int(datetime.now().timestamp() * 1000)
+    doc.donus_acisi = 0
+    doc.guncellenme_ts = now_ts
+    if file_path.exists():
+        doc.boyut_bytes = os.path.getsize(file_path)
+
+    doc_repo.save(doc)
+    await ws_manager.broadcast_all({
+        "type": "DOCUMENTS_UPDATED",
+        "action": "rotate",
+        "document_id": doc_id,
+        "donus_acisi": 0,
+        "sayfa_indeksi": req.sayfa_indeksi or 0,
+        "timestamp": now_ts
+    })
     return doc
 
 @router.put("/documents/{doc_id}", response_model=DocumentItem)
 async def update_document_data(doc_id: str, req: DocumentUpdateRequest):
-    if doc_id not in DOCUMENT_STORE:
+    doc = doc_repo.get_by_id(doc_id)
+    if not doc:
         raise HTTPException(status_code=404, detail="Belge bulunamadı.")
 
-    doc = DOCUMENT_STORE[doc_id]
     if doc.veri is None:
         doc.veri = IrsaliyeData()
 
@@ -220,15 +452,21 @@ async def update_document_data(doc_id: str, req: DocumentUpdateRequest):
     if req.durum is not None:
         doc.durum = req.durum
 
-    DOCUMENT_STORE[doc_id] = doc
+    doc_repo.save(doc)
+    await ws_manager.broadcast_all({
+        "type": "DOCUMENTS_UPDATED",
+        "action": "update",
+        "document_id": doc_id,
+        "durum": doc.durum.value if hasattr(doc.durum, "value") else str(doc.durum)
+    })
     return doc
 
 @router.post("/documents/merge", response_model=DocumentItem)
 async def merge_documents(req: MergeDocumentsRequest):
-    if req.target_doc_id not in DOCUMENT_STORE:
+    target_doc = doc_repo.get_by_id(req.target_doc_id)
+    if not target_doc:
         raise HTTPException(status_code=404, detail="Hedef evrak bulunamadı.")
 
-    target_doc = DOCUMENT_STORE[req.target_doc_id]
     if not target_doc.sayfalar:
         target_doc.sayfalar = [target_doc.dosya_url]
 
@@ -238,11 +476,10 @@ async def merge_documents(req: MergeDocumentsRequest):
     for s_id in req.source_doc_ids:
         if s_id == req.target_doc_id:
             continue
-        if s_id not in DOCUMENT_STORE:
+        src_doc = doc_repo.get_by_id(s_id)
+        if not src_doc:
             continue
 
-        src_doc = DOCUMENT_STORE[s_id]
-        # Sayfaları hedef evraka ekle
         if src_doc.sayfalar:
             for p in src_doc.sayfalar:
                 if p not in target_doc.sayfalar:
@@ -250,18 +487,21 @@ async def merge_documents(req: MergeDocumentsRequest):
         elif src_doc.dosya_url not in target_doc.sayfalar:
             target_doc.sayfalar.append(src_doc.dosya_url)
 
-        # Kalemleri birleştir
         if src_doc.veri and src_doc.veri.kalemler:
             merged_items.extend(src_doc.veri.kalemler)
 
-        # Notları birleştir
         if src_doc.veri and src_doc.veri.genel_notlar:
             extra_notes.append(src_doc.veri.genel_notlar)
 
-        # Kaynak evrakı kuyruktan kaldır
-        del DOCUMENT_STORE[s_id]
+        # Hedef evraka bağlanan sayfaların fiziksel dosyalarını koru, sadece eski thumbnail'ı temizle
+        orphan_thumb = settings.UPLOAD_DIR / f"thumb_{s_id}.jpg"
+        if orphan_thumb.exists():
+            try:
+                orphan_thumb.unlink()
+            except Exception:
+                pass
+        doc_repo.delete(s_id, delete_files=False)
 
-    # Kalemlerin sıra numaralarını 1'den başlatıp yeniden sırala
     for idx, item in enumerate(merged_items, 1):
         item.sira_no = idx
 
@@ -272,107 +512,114 @@ async def merge_documents(req: MergeDocumentsRequest):
             existing = target_doc.veri.genel_notlar or ""
             target_doc.veri.genel_notlar = f"{existing} | {' | '.join(extra_notes)}".strip(" |")
 
-    DOCUMENT_STORE[req.target_doc_id] = target_doc
+    doc_repo.save(target_doc)
+    await ws_manager.broadcast_all({
+        "type": "DOCUMENTS_UPDATED",
+        "action": "merge",
+        "target_doc_id": req.target_doc_id,
+        "source_doc_ids": req.source_doc_ids
+    })
     return target_doc
 
 @router.delete("/documents/{doc_id}")
-
 async def delete_document(doc_id: str):
-    if doc_id in DOCUMENT_STORE:
-        doc = DOCUMENT_STORE.pop(doc_id)
-        try:
-            if os.path.exists(doc.dosya_yolu):
-                os.remove(doc.dosya_yolu)
-            thumb = settings.UPLOAD_DIR / f"thumb_{doc_id}.jpg"
-            if thumb.exists():
-                thumb.unlink()
-        except Exception:
-            pass
+    doc = doc_repo.get_by_id(doc_id)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Belge bulunamadı.")
+
+    doc_repo.delete(doc_id, delete_files=True)
+    await ws_manager.broadcast_all({
+        "type": "DOCUMENTS_UPDATED",
+        "action": "delete",
+        "document_id": doc_id
+    })
     return {"mesaj": "Belge silindi", "id": doc_id}
 
 @router.delete("/documents")
 async def clear_all_documents():
-    for doc in list(DOCUMENT_STORE.values()):
-        try:
-            if os.path.exists(doc.dosya_yolu):
-                os.remove(doc.dosya_yolu)
-            thumb = settings.UPLOAD_DIR / f"thumb_{doc.id}.jpg"
-            if thumb.exists():
-                thumb.unlink()
-        except Exception:
-            pass
-    DOCUMENT_STORE.clear()
+    doc_repo.clear_all(delete_files=True)
+    await ws_manager.broadcast_all({
+        "type": "DOCUMENTS_UPDATED",
+        "action": "clear_all"
+    })
     return {"mesaj": "Kuyruk temizlendi"}
+
+@router.post("/system/cleanup-orphans")
+async def cleanup_orphans_endpoint():
+    deleted = doc_repo.cleanup_orphan_files()
+    return {
+        "mesaj": "Yetim dosya temizliği tamamlandı",
+        "silinen_adet": len(deleted),
+        "silinen_dosyalar": deleted
+    }
 
 @router.get("/documents/{doc_id}/export-excel")
 async def export_single_excel(doc_id: str):
-    if doc_id not in DOCUMENT_STORE:
+    doc = doc_repo.get_by_id(doc_id)
+    if not doc:
         raise HTTPException(status_code=404, detail="Belge bulunamadı.")
-
-    doc = DOCUMENT_STORE[doc_id]
     if not doc.veri:
-        raise HTTPException(status_code=400, detail="Belgede henüz ayrıştırılmış veri yok.")
+        raise HTTPException(status_code=400, detail="Belgede işlenmiş irsaliye verisi bulunmuyor.")
 
-    export_path = excel_exporter.export_single_document(doc)
-    irsaliye_no = doc.veri.header.irsaliye_no or doc_id[:8]
-    filename = f"Irsaliye_{irsaliye_no}.xlsx"
+    export_path = excel_exporter.export_single_irsaliye(doc)
+    irsaliye_no = doc.veri.header.irsaliye_no if doc.veri and doc.veri.header else doc_id[:8]
+    clean_no = re.sub(r'[^a-zA-Z0-9_\-]', '_', str(irsaliye_no))[:50]
     return FileResponse(
         path=export_path,
-        filename=filename,
+        filename=f"irsaliye_{clean_no}.xlsx",
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
 
 @router.get("/batch/export-excel")
 async def export_batch_excel():
-    docs_with_data = [d for d in DOCUMENT_STORE.values() if d.veri is not None]
+    docs = doc_repo.get_all()
+    docs_with_data = [d for d in docs if d.veri is not None]
     if not docs_with_data:
         raise HTTPException(status_code=400, detail="Dışa aktarılacak işlenmiş irsaliye bulunamadı.")
-
-    export_path = excel_exporter.export_batch_summary(list(DOCUMENT_STORE.values()))
-    date_str = datetime.now().strftime("%Y%m%d_%H%M")
-    filename = f"Toplu_Irsaliye_Raporu_{date_str}.xlsx"
+    export_path = excel_exporter.export_batch_irsaliyeler(docs)
     return FileResponse(
         path=export_path,
-        filename=filename,
+        filename="tum_irsaliyeler_toplu_rapor.xlsx",
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
 
 @router.get("/documents/{doc_id}/export-logo-xml")
 async def export_single_logo_xml(doc_id: str):
-    if doc_id not in DOCUMENT_STORE:
+    doc = doc_repo.get_by_id(doc_id)
+    if not doc:
         raise HTTPException(status_code=404, detail="Belge bulunamadı.")
-    doc = DOCUMENT_STORE[doc_id]
     if not doc.veri:
-        raise HTTPException(status_code=400, detail="Belgede henüz ayrıştırılmış veri yok.")
+        raise HTTPException(status_code=400, detail="Belgede işlenmiş irsaliye verisi bulunmuyor.")
+
     export_path = erp_exporter.export_single_logo_xml(doc)
-    irsaliye_no = doc.veri.header.irsaliye_no or doc_id[:8]
     return FileResponse(
         path=export_path,
-        filename=f"Logo_Irsaliye_{irsaliye_no}.xml",
+        filename=f"Logo_Irsaliye_{doc_id[:8]}.xml",
         media_type="application/xml"
     )
 
 @router.get("/documents/{doc_id}/export-json")
 async def export_single_json(doc_id: str):
-    if doc_id not in DOCUMENT_STORE:
+    doc = doc_repo.get_by_id(doc_id)
+    if not doc:
         raise HTTPException(status_code=404, detail="Belge bulunamadı.")
-    doc = DOCUMENT_STORE[doc_id]
     if not doc.veri:
-        raise HTTPException(status_code=400, detail="Belgede henüz ayrıştırılmış veri yok.")
+        raise HTTPException(status_code=400, detail="Belgede işlenmiş irsaliye verisi bulunmuyor.")
+
     export_path = erp_exporter.export_single_erp_json(doc)
-    irsaliye_no = doc.veri.header.irsaliye_no or doc_id[:8]
     return FileResponse(
         path=export_path,
-        filename=f"DocuLog_Irsaliye_{irsaliye_no}.json",
+        filename=f"DocuLog_Irsaliye_{doc_id[:8]}.json",
         media_type="application/json"
     )
 
 @router.get("/batch/export-logo-xml")
 async def export_batch_logo_xml():
-    docs_with_data = [d for d in DOCUMENT_STORE.values() if d.veri is not None]
+    docs = doc_repo.get_all()
+    docs_with_data = [d for d in docs if d.veri is not None]
     if not docs_with_data:
         raise HTTPException(status_code=400, detail="Dışa aktarılacak işlenmiş irsaliye bulunamadı.")
-    export_path = erp_exporter.export_batch_logo_xml(list(DOCUMENT_STORE.values()))
+    export_path = erp_exporter.export_batch_logo_xml(docs)
     date_str = datetime.now().strftime("%Y%m%d_%H%M")
     return FileResponse(
         path=export_path,
@@ -382,10 +629,11 @@ async def export_batch_logo_xml():
 
 @router.get("/batch/export-json")
 async def export_batch_json():
-    docs_with_data = [d for d in DOCUMENT_STORE.values() if d.veri is not None]
+    docs = doc_repo.get_all()
+    docs_with_data = [d for d in docs if d.veri is not None]
     if not docs_with_data:
         raise HTTPException(status_code=400, detail="Dışa aktarılacak işlenmiş irsaliye bulunamadı.")
-    export_path = erp_exporter.export_batch_erp_json(list(DOCUMENT_STORE.values()))
+    export_path = erp_exporter.export_batch_erp_json(docs)
     date_str = datetime.now().strftime("%Y%m%d_%H%M")
     return FileResponse(
         path=export_path,
@@ -393,24 +641,14 @@ async def export_batch_json():
         media_type="application/json"
     )
 
-
 @router.get("/analytics", response_model=AnalyticsResponse)
 async def get_analytics():
-    """
-    Kuyruktaki tüm irsaliyelerden gerçek zamanlı lojistik KPI, zaman serisi,
-    tedarikçi dağılımı, ürün frekansları ve operasyonel durum analizini döner.
-    """
-    docs = list(DOCUMENT_STORE.values())
+    docs = doc_repo.get_all()
     return analytics_service.compute_analytics(docs)
-
 
 @router.get("/analytics/export-report")
 async def export_executive_report_endpoint():
-    """
-    Lojistik Yönetici Kokpiti için resmi, çok sayfalı (Yonetici_Ozeti, Tedarikci_Dagilimi,
-    En_Cok_Gelen_Kalemler, Evrak_Dokumu) kurumsal Excel raporu üretir ve indirir.
-    """
-    docs = list(DOCUMENT_STORE.values())
+    docs = doc_repo.get_all()
     analytics_data = analytics_service.compute_analytics(docs)
     export_path = excel_exporter.export_executive_report(analytics_data, docs)
     date_str = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -421,7 +659,6 @@ async def export_executive_report_endpoint():
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
 
-
 class ApiKeyRequest(BaseModel):
     api_key: str
 
@@ -429,7 +666,8 @@ class ApiKeyRequest(BaseModel):
 async def get_api_key_status():
     key = os.getenv("GEMINI_API_KEY", "") or settings.GEMINI_API_KEY
     is_set = bool(key and key != "your_gemini_api_key_here")
-    masked = f"{key[:6]}...{key[-4:]}" if is_set and len(key) > 10 else ("Tanımlı" if is_set else "Tanımsız")
+    # API anahtarının sızmaması için yalnızca son 4 karakterini maskeli olarak göster
+    masked = f"••••••••••••••••{key[-4:]}" if is_set and len(key) >= 4 else ("Tanımlı" if is_set else "Tanımsız")
     return {
         "is_configured": is_set,
         "masked_key": masked,
@@ -439,52 +677,54 @@ async def get_api_key_status():
 @router.post("/settings/api-key")
 async def save_api_key(req: ApiKeyRequest):
     key = req.api_key.strip()
-    if not key:
-        raise HTTPException(status_code=400, detail="Geçersiz API anahtarı.")
+    # Güvenlik kontrolleri: Boş, aşırı uzun veya geçersiz format
+    if not key or len(key) < 10 or len(key) > 256:
+        raise HTTPException(status_code=400, detail="Geçersiz API anahtarı formatı veya uzunluğu.")
+
+    # .env içine newline veya kontrol karakteri enjeksiyonunu engelle (Environment Injection koruması)
+    if any(c in key for c in ('\r', '\n', '\x00', '"', "'", '`', '$', ';')):
+        raise HTTPException(status_code=400, detail="API anahtarı geçersiz karakterler içeremez.")
+
+    if not re.match(r"^[a-zA-Z0-9_\-\.]+$", key):
+        raise HTTPException(status_code=400, detail="API anahtarı yalnızca alfanümerik ve güvenli karakterler içerebilir.")
 
     os.environ["GEMINI_API_KEY"] = key
     settings.GEMINI_API_KEY = key
     gemini_extractor.api_key = key
     gemini_extractor._client = None
 
-    # .env dosyalarına güvenli yazım
-    for target_dir in (settings.WORKSPACE_DIR, settings.BACKEND_DIR):
-        env_file = target_dir / ".env"
-        try:
-            lines = []
-            if env_file.exists():
-                with open(env_file, "r", encoding="utf-8") as f:
-                    lines = f.readlines()
-            
-            has_key = False
-            new_lines = []
-            for line in lines:
-                if line.startswith("GEMINI_API_KEY="):
-                    new_lines.append(f"GEMINI_API_KEY={key}\n")
-                    has_key = True
-                else:
-                    new_lines.append(line)
-            if not has_key:
-                new_lines.append(f"GEMINI_API_KEY={key}\n")
+    env_path = settings.WORKSPACE_DIR / ".env"
+    try:
+        lines = []
+        if env_path.exists():
+            with open(env_path, "r", encoding="utf-8") as f:
+                lines = f.readlines()
+        has_key = False
+        new_lines = []
+        for line in lines:
+            if line.startswith("GEMINI_API_KEY="):
+                new_lines.append(f'GEMINI_API_KEY="{key}"\n')
+                has_key = True
+            else:
+                new_lines.append(line)
+        if not has_key:
+            new_lines.append(f'\nGEMINI_API_KEY="{key}"\n')
+        with open(env_path, "w", encoding="utf-8") as f:
+            f.writelines(new_lines)
+        # Sıkı izinler (chmod 600 - sadece sahip okuyup yazabilir)
+        os.chmod(env_path, 0o600)
+    except Exception as e:
+        print(f".env kaydetme uyarısı: {e}")
 
-            with open(env_file, "w", encoding="utf-8") as f:
-                f.writelines(new_lines)
-        except Exception as e:
-            print(f"{env_file} yazılamadı: {e}")
-
-    return {"mesaj": "API Anahtarı başarıyla güncellendi", "is_configured": True}
-
-
-# --- Telefondan Canlı Yükleme (Mobile QR Bridge) Uç Noktaları ---
+    return {"mesaj": "API anahtarı başarıyla güncellendi", "is_configured": True}
 
 @router.get("/qr-url")
 async def get_qr_url(session_id: Optional[str] = None):
-    """
-    Yerel ağ IP adresini otomatik tespit eder ve telefonun bağlanacağı
-    özel session URL'sini ve yüksek çözünürlüklü QR kodunu döner.
-    """
     if not session_id:
         session_id = uuid.uuid4().hex[:12]
+    else:
+        # Session ID sanitizasyonu
+        session_id = re.sub(r'[^a-zA-Z0-9_\-]', '', session_id)[:64] or uuid.uuid4().hex[:12]
 
     lan_ip = get_lan_ip()
     port = settings.PORT
@@ -499,17 +739,12 @@ async def get_qr_url(session_id: Optional[str] = None):
         "qr_data_url": qr_data_url,
     }
 
-
 @router.post("/mobile-upload", response_model=DocumentItem)
 async def mobile_upload(
     files: List[UploadFile] = File(default=[]),
     file: Optional[UploadFile] = File(default=None),
     session_id: str = Form("default-session")
 ):
-    """
-    Telefondan çekilen bir veya birden fazla sayfayı (Çok Sayfalı İrsaliye)
-    kuyruğa alır ve WebSocket üzerinden masaüstüne canlı aktarır.
-    """
     all_files = list(files) if files else []
     if file:
         all_files.append(file)
@@ -517,25 +752,32 @@ async def mobile_upload(
     if not all_files:
         raise HTTPException(status_code=400, detail="Hiçbir dosya gönderilmedi")
 
+    # Session ID sanitizasyonu
+    clean_session_id = re.sub(r'[^a-zA-Z0-9_\-]', '', session_id)[:64] or "default-session"
+
     doc_id = str(uuid.uuid4())
     page_urls: List[str] = []
     first_file_path = None
     total_bytes = 0
 
     for idx, f in enumerate(all_files):
-        ext = f.filename.split(".")[-1].lower() if "." in f.filename else "jpg"
-        if ext not in settings.ALLOWED_EXTENSIONS:
+        try:
+            _, file_path, safe_filename, file_size, _ = await save_and_validate_upload(
+                f,
+                custom_prefix=f"mobile_{doc_id}_p{idx+1}",
+                doc_id=doc_id
+            )
+        except HTTPException:
+            if len(all_files) == 1:
+                raise
             continue
-        safe_filename = f"mobile_{doc_id}_p{idx+1}_{f.filename}"
-        file_path = settings.UPLOAD_DIR / safe_filename
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(f.file, buffer)
-        
-        file_bytes = os.path.getsize(file_path)
-        total_bytes += file_bytes
+
+        # Görselin EXIF oryantasyonunu normalize et
+        image_processor.normalize_image(file_path)
+        total_bytes += file_size
         url = f"/uploads/{safe_filename}"
         page_urls.append(url)
-        if idx == 0:
+        if first_file_path is None:
             first_file_path = file_path
             thumb_path = settings.UPLOAD_DIR / f"thumb_{doc_id}.jpg"
             image_processor.generate_thumbnail(file_path, thumb_path)
@@ -550,6 +792,7 @@ async def mobile_upload(
         else f"Mobil İrsaliye ({datetime.now().strftime('%H:%M:%S')})"
     )
 
+    now_ts = int(datetime.now().timestamp() * 1000)
     doc_item = DocumentItem(
         id=doc_id,
         dosya_adi=doc_title,
@@ -561,40 +804,29 @@ async def mobile_upload(
         donus_acisi=0,
         durum=ProcessingStatus.KUYRUKTA,
         sayfalar=page_urls,
+        guncellenme_ts=now_ts
     )
 
-    DOCUMENT_STORE[doc_id] = doc_item
+    doc_repo.save(doc_item)
 
-    # Masaüstü oturumuna WebSocket üzerinden canlı sinyal gönder
-    await ws_manager.send_to_session(session_id, {
+    await ws_manager.send_to_session(clean_session_id, {
         "type": "DOCUMENT_UPLOADED",
-        "session_id": session_id,
+        "session_id": clean_session_id,
         "document": doc_item.model_dump()
     })
 
-    # Tüm bağlı dinleyicilere genel bildirim yayınla
+    await ws_manager.broadcast_all({
+        "type": "DOCUMENTS_UPDATED",
+        "action": "mobile_upload",
+        "session_id": clean_session_id,
+        "document_id": doc_id,
+        "document": doc_item.model_dump()
+    })
+
     await ws_manager.broadcast_all({
         "type": "NEW_DOCUMENT_IN_QUEUE",
-        "session_id": session_id,
+        "session_id": clean_session_id,
         "document_id": doc_id
     })
 
     return doc_item
-
-
-@router.websocket("/ws/{session_id}")
-async def router_websocket_endpoint(websocket: WebSocket, session_id: str):
-    """
-    APIRouter seviyesinde WebSocket kanalı (/api/ws/{session_id})
-    """
-    await ws_manager.connect(websocket, session_id)
-    try:
-        while True:
-            data = await websocket.receive_text()
-            if data == "ping":
-                await websocket.send_text("pong")
-    except WebSocketDisconnect:
-        ws_manager.disconnect(websocket, session_id)
-    except Exception:
-        ws_manager.disconnect(websocket, session_id)
-

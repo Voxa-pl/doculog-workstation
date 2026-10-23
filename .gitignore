@@ -3,6 +3,20 @@
 *.env
 .env.local
 
+# Databases & Runtime State
+*.db
+*.db-shm
+*.db-wal
+backend/doculog.db*
+
+# Uploads & Temporary Media
+backend/uploads/*
+!backend/uploads/.gitkeep
+backend/exports/*
+!backend/exports/.gitkeep
+test_data/
+screenshots/
+
 # Python cache & virtualenvs
 __pycache__/
 *.py[cod]
@@ -25,7 +39,6 @@ yarn-error.log*
 .agents/
 scratch/
 test_*.png
-test_*.py
 
 # Operating System Files
 .DS_Store

@@ -1,5 +1,7 @@
 import re
-from typing import List, Dict, Optional, Tuple
+import math
+import logging
+from typing import List, Dict, Optional, Tuple, Any
 from datetime import datetime, date
 from collections import defaultdict, Counter
 
@@ -13,6 +15,8 @@ from ..models.analytics import (
     AnalyticsResponse
 )
 
+logger = logging.getLogger(__name__)
+
 CLAIM_KEYWORDS = [
     "hasar", "ezik", "eksik", "iade", "fark", "şerh", "serh",
     "kusur", "yırtık", "yirtik", "kırık", "kirik", "zayi",
@@ -25,13 +29,51 @@ class AnalyticsService:
     DocuLog Workstation Lojistik Yönetici Kokpiti ve Operasyonel Analitik Servisi.
     Kuyruktaki tüm irsaliyelerden gerçek zamanlı KPI, zaman serisi, tedarikçi dağılımı,
     ürün frekansları ve operasyonel uyuşmazlık metriklerini derler.
+    Tüm hesaplamalarda sıfıra bölme (ZeroDivisionError), NoneType referansları,
+    boş liste ve beklenmeyen alan tiplerine karşı defansif koruma sağlar.
     """
 
+    @staticmethod
+    def _safe_float(val: Any, default: float = 0.0) -> float:
+        """
+        Değeri güvenli şekilde float'a dönüştürür.
+        None, geçersiz dize, virgüllü ondalıklar ('12,50'), NaN ve Infinity durumlarında
+        hata fırlatmadan default değer döner.
+        """
+        if val is None:
+            return default
+        if isinstance(val, (int, float)):
+            if math.isnan(val) or math.isinf(val):
+                return default
+            return float(val)
+        if isinstance(val, str):
+            clean = val.strip().replace(" ", "").replace(",", ".")
+            try:
+                f = float(clean)
+                if math.isnan(f) or math.isinf(f):
+                    return default
+                return f
+            except (ValueError, TypeError):
+                return default
+        try:
+            f = float(val)
+            if math.isnan(f) or math.isinf(f):
+                return default
+            return f
+        except (ValueError, TypeError):
+            return default
+
     @classmethod
-    def compute_analytics(cls, documents: List[DocumentItem]) -> AnalyticsResponse:
+    def compute_analytics(cls, documents: Optional[List[Optional[DocumentItem]]]) -> AnalyticsResponse:
         now_str = datetime.now().strftime("%d.%m.%Y %H:%M:%S")
 
-        if not documents:
+        # NoneType ve geçersiz nesne filtreleme
+        clean_docs: List[DocumentItem] = [
+            d for d in (documents or [])
+            if d is not None and isinstance(d, DocumentItem)
+        ]
+
+        if not clean_docs:
             return AnalyticsResponse(
                 kpi=KPISummary(),
                 zaman_serisi=[],
@@ -43,14 +85,15 @@ class AnalyticsService:
             )
 
         # 1. Temel Durum Sayımları
-        total_volume = len(documents)
-        onaylandi = sum(1 for d in documents if d.durum == ProcessingStatus.ONAYLANDI)
-        tamamlandi = sum(1 for d in documents if d.durum == ProcessingStatus.TAMAMLANDI)
-        kuyrukta = sum(1 for d in documents if d.durum == ProcessingStatus.KUYRUKTA)
-        isleniyor = sum(1 for d in documents if d.durum == ProcessingStatus.ISLENIYOR)
-        hata = sum(1 for d in documents if d.durum == ProcessingStatus.HATA)
+        total_volume = len(clean_docs)
+        onaylandi = sum(1 for d in clean_docs if getattr(d, "durum", None) == ProcessingStatus.ONAYLANDI)
+        tamamlandi = sum(1 for d in clean_docs if getattr(d, "durum", None) == ProcessingStatus.TAMAMLANDI)
+        kuyrukta = sum(1 for d in clean_docs if getattr(d, "durum", None) == ProcessingStatus.KUYRUKTA)
+        isleniyor = sum(1 for d in clean_docs if getattr(d, "durum", None) == ProcessingStatus.ISLENIYOR)
+        hata = sum(1 for d in clean_docs if getattr(d, "durum", None) == ProcessingStatus.HATA)
 
         # Onay Oranı Formülü: onaylandi / (onaylandi + tamamlandi + hata)
+        # Sıfıra bölme koruması
         evaluated_count = onaylandi + tamamlandi + hata
         onay_orani_yuzde = (
             round((onaylandi / evaluated_count) * 100.0, 1)
@@ -62,17 +105,20 @@ class AnalyticsService:
         total_item_count = 0
         total_item_quantity = 0.0
 
-        for doc in documents:
+        for doc in clean_docs:
             if doc.veri and doc.veri.kalemler:
                 for item in doc.veri.kalemler:
+                    if item is None:
+                        continue
                     total_item_count += 1
-                    qty = float(item.miktar or 0.0)
+                    qty = cls._safe_float(getattr(item, "miktar", None), 0.0)
                     total_item_quantity += qty
                     all_items.append((doc, item))
 
         total_item_quantity = round(total_item_quantity, 2)
 
         # 3. Ortalama Dijitalleştirme Hızı (sn/evrak)
+        # Sıfıra bölme koruması
         processed_count = tamamlandi + onaylandi
         if processed_count > 0:
             avg_items_per_doc = total_item_count / processed_count
@@ -91,17 +137,19 @@ class AnalyticsService:
         )
 
         # 4. Operasyonel Durum & Uyuşmazlıklar
-        discrepancy_count = sum(1 for d in documents if cls._has_discrepancy(d))
+        discrepancy_count = sum(1 for d in clean_docs if cls._has_discrepancy(d))
         discrepancy_rate = (
             round((discrepancy_count / total_volume) * 100.0, 1)
             if total_volume > 0 else 0.0
         )
 
-        conf_scores = [
-            float(d.veri.guven_skoru)
-            for d in documents
-            if d.veri and d.veri.guven_skoru is not None
-        ]
+        conf_scores: List[float] = []
+        for d in clean_docs:
+            if d.veri and getattr(d.veri, "guven_skoru", None) is not None:
+                score = cls._safe_float(d.veri.guven_skoru, -1.0)
+                if 0.0 <= score <= 1.0:
+                    conf_scores.append(score)
+
         avg_confidence = (
             round(sum(conf_scores) / len(conf_scores), 2)
             if conf_scores else 0.0
@@ -119,10 +167,10 @@ class AnalyticsService:
         )
 
         # 5. Zaman Serisi Dağılımı (Tarihe göre gruplama ve kronolojik sıralama)
-        time_series = cls._build_time_series(documents)
+        time_series = cls._build_time_series(clean_docs)
 
         # 6. Tedarikçi Dağılımı (Hacme göre sıralı ve pay yüzdeli)
-        supplier_distribution = cls._build_supplier_distribution(documents, total_item_quantity)
+        supplier_distribution = cls._build_supplier_distribution(clean_docs, total_item_quantity)
 
         # 7. En Çok Gelen Kalemler Dağılımı (Miktara göre sıralı)
         top_items = cls._build_top_items(all_items)
@@ -149,14 +197,18 @@ class AnalyticsService:
         3. Belge genel toplam miktarı ile satır kalemleri miktarı toplamı uyuşmuyorsa
         4. OCR güven skoru 0.85'in altındaysa
         """
-        if doc.durum == ProcessingStatus.HATA:
-            return True
-
-        if not doc.veri:
+        if not doc:
             return False
 
-        # Genel notlarda şerh/hasar/eksik kontrolü (olumlu ifadeleri 'eksiksiz', 'hasarsız' filtreleyerek kontrol et)
-        notes = (doc.veri.genel_notlar or "").lower()
+        if getattr(doc, "durum", None) == ProcessingStatus.HATA:
+            return True
+
+        if not getattr(doc, "veri", None):
+            return False
+
+        # Genel notlarda şerh/hasar/eksik kontrolü
+        raw_notes = getattr(doc.veri, "genel_notlar", None)
+        notes = str(raw_notes or "").lower() if raw_notes is not None else ""
         if notes:
             clean_notes = notes
             for positive in ["hasarsız", "hasarsiz", "eksiksiz", "kusursuz", "şerhsiz", "serhsiz", "sorunsuz", "noksansız", "noksansiz"]:
@@ -165,28 +217,44 @@ class AnalyticsService:
                 return True
 
         # Kalem miktarları toplamı ile genel toplam uyuşmazlığı
-        if doc.veri.genel_toplam_miktar is not None and doc.veri.kalemler:
-            sum_items = sum(float(k.miktar or 0.0) for k in doc.veri.kalemler)
-            if abs(float(doc.veri.genel_toplam_miktar) - sum_items) > 0.01:
+        genel_toplam = getattr(doc.veri, "genel_toplam_miktar", None)
+        kalemler = getattr(doc.veri, "kalemler", None)
+        if genel_toplam is not None and kalemler:
+            sum_items = sum(cls._safe_float(getattr(k, "miktar", None), 0.0) for k in kalemler if k)
+            doc_genel = cls._safe_float(genel_toplam, 0.0)
+            if abs(doc_genel - sum_items) > 0.01:
                 return True
 
         # Düşük güven skoru
-        if doc.veri.guven_skoru is not None and doc.veri.guven_skoru < 0.85:
-            return True
+        raw_conf = getattr(doc.veri, "guven_skoru", None)
+        if raw_conf is not None:
+            conf_val = cls._safe_float(raw_conf, 1.0)
+            if conf_val < 0.85:
+                return True
 
         return False
 
     @classmethod
-    def _normalize_date(cls, raw_date: Optional[str]) -> Tuple[str, Optional[date]]:
+    def _normalize_date(cls, raw_date: Any) -> Tuple[str, Optional[date]]:
         """
-        Farklı tarih formatlarını (GG.AA.YYYY, YYYY-MM-DD, GG/AA/YYYY) GG.AA.YYYY formatına dönüştürür
-        ve sıralama için date objesi üretir.
+        Farklı tarih formatlarını (GG.AA.YYYY, YYYY-MM-DD, GG/AA/YYYY, datetime, date)
+        GG.AA.YYYY formatına dönüştürür ve sıralama için date objesi üretir.
         """
-        if not raw_date or not raw_date.strip():
-            today = date.today()
-            return today.strftime("%d.%m.%Y"), today
+        today = date.today()
+        today_str = today.strftime("%d.%m.%Y")
 
-        clean_str = raw_date.strip()
+        if raw_date is None:
+            return today_str, today
+
+        if isinstance(raw_date, datetime):
+            return raw_date.strftime("%d.%m.%Y"), raw_date.date()
+
+        if isinstance(raw_date, date):
+            return raw_date.strftime("%d.%m.%Y"), raw_date
+
+        clean_str = str(raw_date).strip()
+        if not clean_str:
+            return today_str, today
 
         # GG.AA.YYYY veya GG-AA-YYYY veya GG/AA/YYYY
         m1 = re.match(r"^(\d{1,2})[./\-](\d{1,2})[./\-](\d{4})", clean_str)
@@ -195,7 +263,7 @@ class AnalyticsService:
                 day, month, year = int(m1.group(1)), int(m1.group(2)), int(m1.group(3))
                 d_obj = date(year, month, day)
                 return f"{day:02d}.{month:02d}.{year:04d}", d_obj
-            except ValueError:
+            except (ValueError, OverflowError):
                 pass
 
         # YYYY-MM-DD veya YYYY.MM.DD veya YYYY/MM/DD
@@ -205,12 +273,10 @@ class AnalyticsService:
                 year, month, day = int(m2.group(1)), int(m2.group(2)), int(m2.group(3))
                 d_obj = date(year, month, day)
                 return f"{day:02d}.{month:02d}.{year:04d}", d_obj
-            except ValueError:
+            except (ValueError, OverflowError):
                 pass
 
-        # Parse edilemezse bugünün tarihini güvenli fallback olarak dön
-        today = date.today()
-        return today.strftime("%d.%m.%Y"), today
+        return today_str, today
 
     @classmethod
     def _build_time_series(cls, documents: List[DocumentItem]) -> List[TimeSeriesPoint]:
@@ -224,25 +290,28 @@ class AnalyticsService:
         })
 
         for doc in documents:
+            if not doc:
+                continue
             # Tarih önceliği: duzenleme_tarihi -> sevk_tarihi -> yuklenme_tarihi
             raw_date = None
             if doc.veri and doc.veri.header:
                 raw_date = doc.veri.header.duzenleme_tarihi or doc.veri.header.sevk_tarihi
-            if not raw_date and doc.yuklenme_tarihi:
-                raw_date = doc.yuklenme_tarihi[:10]
+            if not raw_date and getattr(doc, "yuklenme_tarihi", None):
+                raw_date = str(doc.yuklenme_tarihi)[:10]
 
             normalized_str, date_obj = cls._normalize_date(raw_date)
 
             group = date_groups[normalized_str]
             group["evrak_sayisi"] += 1
-            if doc.durum == ProcessingStatus.ONAYLANDI:
+            if getattr(doc, "durum", None) == ProcessingStatus.ONAYLANDI:
                 group["onaylanan_sayisi"] += 1
             if group["sort_key"] is None:
                 group["sort_key"] = date_obj
 
-            if doc.veri and doc.veri.kalemler:
-                group["kalem_sayisi"] += len(doc.veri.kalemler)
-                group["toplam_miktar"] += sum(float(k.miktar or 0.0) for k in doc.veri.kalemler)
+            if doc.veri and getattr(doc.veri, "kalemler", None):
+                valid_items = [k for k in doc.veri.kalemler if k]
+                group["kalem_sayisi"] += len(valid_items)
+                group["toplam_miktar"] += sum(cls._safe_float(getattr(k, "miktar", None), 0.0) for k in valid_items)
 
         # Kronolojik sıralama
         sorted_items = sorted(
@@ -272,13 +341,16 @@ class AnalyticsService:
         suppliers: Dict[str, Dict] = {}
 
         for doc in documents:
+            if not doc:
+                continue
             unvan = "Tanımsız Tedarikçi"
             vkn = None
-            if doc.veri and doc.veri.header:
-                h_unvan = (doc.veri.header.gonderici_unvan or "").strip()
+            if doc.veri and getattr(doc.veri, "header", None):
+                h_unvan = str(getattr(doc.veri.header, "gonderici_unvan", "") or "").strip()
                 if h_unvan:
                     unvan = h_unvan
-                vkn = (doc.veri.header.gonderici_vkn or "").strip() or None
+                raw_vkn = str(getattr(doc.veri.header, "gonderici_vkn", "") or "").strip()
+                vkn = raw_vkn if raw_vkn else None
 
             if unvan not in suppliers:
                 suppliers[unvan] = {
@@ -294,9 +366,10 @@ class AnalyticsService:
             if not sup["vkn"] and vkn:
                 sup["vkn"] = vkn
 
-            if doc.veri and doc.veri.kalemler:
-                sup["kalem_sayisi"] += len(doc.veri.kalemler)
-                sup["toplam_miktar"] += sum(float(k.miktar or 0.0) for k in doc.veri.kalemler)
+            if doc.veri and getattr(doc.veri, "kalemler", None):
+                valid_items = [k for k in doc.veri.kalemler if k]
+                sup["kalem_sayisi"] += len(valid_items)
+                sup["toplam_miktar"] += sum(cls._safe_float(getattr(k, "miktar", None), 0.0) for k in valid_items)
 
         # Sıralama: toplam_miktar DESC, ardından evrak_sayisi DESC
         sorted_suppliers = sorted(
@@ -311,6 +384,7 @@ class AnalyticsService:
         results = []
         for s in sorted_suppliers:
             # Pay yüzdesi: Miktar varsa miktara göre, yoksa evrak sayısına göre
+            # Sıfıra bölme koruması
             if sum_all_supplier_quantities > 0:
                 pay = round((s["toplam_miktar"] / sum_all_supplier_quantities) * 100.0, 1)
             elif total_docs > 0:
@@ -339,14 +413,16 @@ class AnalyticsService:
         item_groups: Dict[str, Dict] = {}
 
         for doc, item in all_items:
-            raw_name = (item.mal_hizmet or "").strip()
+            if not item:
+                continue
+            raw_name = str(getattr(item, "mal_hizmet", "") or "").strip()
             if not raw_name:
                 continue
 
             # Anahtar olarak küçük harf ve boşluk temizleme
             norm_key = " ".join(raw_name.lower().split())
-            qty = float(item.miktar or 0.0)
-            unit = (item.birim or "Adet").strip()
+            qty = cls._safe_float(getattr(item, "miktar", None), 0.0)
+            unit = str(getattr(item, "birim", "Adet") or "Adet").strip()
 
             if norm_key not in item_groups:
                 item_groups[norm_key] = {
@@ -382,3 +458,4 @@ class AnalyticsService:
 
 
 analytics_service = AnalyticsService()
+

@@ -1,6 +1,7 @@
 from pathlib import Path
 from typing import List, Optional, Any
 from datetime import datetime
+import re
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
@@ -19,15 +20,25 @@ class ExcelExporter:
     BORDER_COLOR = Side(border_style="thin", color="CBD5E1")
     THIN_BORDER = Border(left=BORDER_COLOR, right=BORDER_COLOR, top=BORDER_COLOR, bottom=BORDER_COLOR)
 
-    @staticmethod
-    def sanitize_cell_value(val: Any) -> Any:
+    DANGEROUS_FORMULA_PREFIXES = ('=', '+', '-', '@', '\t', '\r', '%', '|')
+
+    @classmethod
+    def sanitize_cell_value(cls, val: Any) -> Any:
         """
-        Formül Enjeksiyonu (CSV/Excel Formula Injection) koruması.
-        Hücre içeriği '=', '+', '-', '@', tab veya cr ile başlıyorsa başına tek tırnak (') ekler.
+        Formül Enjeksiyonu (CSV/Excel Formula Injection - CWE-1236) koruması.
+        Dışarıdan gelen metin öndeki boşluklar temizlendikten sonra '=', '+', '-', '@',
+        tab (\t), cr (\r), '%' veya '|' ile başlıyorsa Excel veya diğer hesap tablosu
+        yazılımlarının bunu zararlı formül/makro gibi çalıştırmasını engellemek için
+        başına tek tırnak (') ekler.
         """
-        if isinstance(val, str) and len(val) > 0:
-            if val[0] in ('=', '+', '-', '@', '\t', '\r'):
-                return "'" + val
+        if val is None:
+            return ""
+        if isinstance(val, str):
+            stripped = val.lstrip()
+            if stripped and (stripped[0] in cls.DANGEROUS_FORMULA_PREFIXES or stripped.startswith((';', '%', '|'))):
+                if not val.startswith("'"):
+                    return "'" + val
+            return val
         return val
 
     @classmethod
@@ -112,13 +123,16 @@ class ExcelExporter:
                 cell.border = cls.THIN_BORDER
 
             if item.miktar:
-                total_qty += float(item.miktar)
+                try:
+                    total_qty += float(str(item.miktar).replace(',', '.'))
+                except (ValueError, TypeError):
+                    pass
             ws.row_dimensions[row_idx].height = 20
 
         # Toplam Satırı
         row_idx += 1
         ws.cell(row=row_idx, column=2, value="TOPLAM MİKTAR:").font = Font(name="Segoe UI", size=10, bold=True)
-        tot_cell = ws.cell(row=row_idx, column=3, value=total_qty)
+        tot_cell = ws.cell(row=row_idx, column=3, value=round(total_qty, 2))
         tot_cell.font = Font(name="Segoe UI", size=10, bold=True, color="1E3A8A")
         tot_cell.alignment = Alignment(horizontal="right")
 
@@ -130,8 +144,10 @@ class ExcelExporter:
 
         cls._adjust_column_widths(ws)
 
-        target_file = output_path or (settings.EXPORT_DIR / f"irsaliye_{data.header.irsaliye_no or doc.id}.xlsx")
+        safe_irsaliye_no = re.sub(r'[^a-zA-Z0-9_\-]', '_', str(data.header.irsaliye_no or doc.id))[:50]
+        target_file = output_path or (settings.EXPORT_DIR / f"irsaliye_{safe_irsaliye_no}.xlsx")
         wb.save(target_file)
+        wb.close()
         return target_file
 
     @classmethod
@@ -228,6 +244,7 @@ class ExcelExporter:
 
         target_file = output_path or (settings.EXPORT_DIR / "tum_irsaliyeler_toplu_rapor.xlsx")
         wb.save(target_file)
+        wb.close()
         return target_file
 
     @classmethod
@@ -294,7 +311,7 @@ class ExcelExporter:
             ("Tamamlanan / İşlenen Belge", kpi.tamamlanan_belge, "Evrak (OCR Başarılı)"),
             ("Toplam İşlenen Kalem Adedi", kpi.toplam_islenen_kalem_adedi, "Satır Kalemi"),
             ("Toplam İşlenen Mal Miktarı", kpi.toplam_islenen_miktar, "Sayısal Birim Toplamı"),
-            ("Ortalama Dijitalleştirme Hızı", f"{kpi.ortalama_dijitallesme_hizi_sn} sn", "Evrak Başına Yapay Zeka Hızı")
+            ("Ortalama Dijitalleştirme Hızı", f"{kpi.ortalama_dijitallesme_hizi_sn} sn", "Evrak Başına Ortalama Çözümleme Hızı")
         ]
 
         r_kpi += 1
@@ -342,7 +359,7 @@ class ExcelExporter:
             ("Onaylandı (Kabul Edildi)", durum.onaylandi, "Sevkiyat eksiksiz onaylandı"),
             ("Tamamlandı (Onay Bekleyen)", durum.tamamlandi, "Ayrıştırma yapıldı, kabul onayı bekliyor"),
             ("Kuyrukta Bekleyen", durum.kuyrukta, "İşleme sırası bekleyen evraklar"),
-            ("İşlenmekte Olan", durum.isleniyor, "Yapay zeka analiz sürecinde"),
+            ("İşlenmekte Olan", durum.isleniyor, "Otomatik çözümleme sürecinde"),
             ("Hata Alan Belge", durum.hata, "Okuma veya format hatası"),
             ("Tespit Edilen Uyuşmazlık Adedi", durum.uyusmazlik_sayisi, "Hasar, eksik, miktar farkı veya düşük güven"),
             ("Operasyonel Uyuşmazlık Oranı", f"%{durum.uyusmazlik_orani_yuzde}", "Uyuşmazlıkların toplam hacme oranı"),
@@ -535,7 +552,13 @@ class ExcelExporter:
         for idx, doc in enumerate(documents, start=1):
             h = doc.veri.header if doc.veri else None
             kalemler = doc.veri.kalemler if doc.veri else []
-            doc_qty = sum(float(k.miktar or 0.0) for k in kalemler)
+            doc_qty = 0.0
+            for k in kalemler:
+                if k and getattr(k, 'miktar', None) is not None:
+                    try:
+                        doc_qty += float(str(k.miktar).replace(',', '.'))
+                    except (ValueError, TypeError):
+                        pass
 
             c1 = ws_docs.cell(row=r_d, column=1, value=cls.sanitize_cell_value(h.irsaliye_no if h and h.irsaliye_no else doc.id[:8]))
             c2 = ws_docs.cell(row=r_d, column=2, value=cls.sanitize_cell_value(h.duzenleme_tarihi if h and h.duzenleme_tarihi else doc.yuklenme_tarihi[:10]))
@@ -572,6 +595,7 @@ class ExcelExporter:
         # Raporu kaydet
         target_file = output_path or (settings.EXPORT_DIR / f"Resmi_Mal_Kabul_Yonetici_Raporu_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx")
         wb.save(target_file)
+        wb.close()
         return target_file
 
     @staticmethod
@@ -584,6 +608,10 @@ class ExcelExporter:
                 if len(val_str) > max_len and not cell.coordinate in ws.merged_cells:
                     max_len = len(val_str)
             ws.column_dimensions[col_letter].width = max(max_len + 4, 12)
+
+    # API ve servis rotaları için uyumluluk aliasları
+    export_single_irsaliye = export_single_document
+    export_batch_irsaliyeler = export_batch_summary
 
 excel_exporter = ExcelExporter()
 

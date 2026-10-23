@@ -59,6 +59,7 @@ export interface DocumentItem {
   hata_mesaji?: string | null;
   veri?: IrsaliyeData | null;
   sayfalar?: string[];
+  guncellenme_ts?: number;
 }
 
 
@@ -92,6 +93,7 @@ export interface QrBridgeInfo {
 
 export type AppTheme = 'koyu-kurumsal' | 'gece-vardiyasi' | 'acik-ofis';
 export type AppView = 'station' | 'dashboard';
+export type MobileTab = 'queue' | 'viewer' | 'editor';
 
 export interface KpiMetrics {
   toplam_irsaliye_hacmi: number;

@@ -4,7 +4,7 @@ import { EmptyChartState } from './EmptyChartState';
 import { TrendingUp, Calendar } from 'lucide-react';
 
 export interface TimeSeriesChartProps {
-  data: TimeSeriesPoint[];
+  data?: TimeSeriesPoint[] | null;
   onActionToStation?: () => void;
 }
 
@@ -14,9 +14,11 @@ export const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({
 }) => {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
-  if (!data || data.length === 0) {
+  const safeData = Array.isArray(data) ? data : [];
+
+  if (safeData.length === 0) {
     return (
-      <div data-testid="chart-timeseries" className="h-full">
+      <div data-testid="chart-timeseries" className="h-full min-w-0">
         <EmptyChartState
           title="Zaman Serisi Verisi Yok"
           description="Sisteme henüz tarihli irsaliye kaydedilmedi. İrsaliyeler işlendikçe akış grafiği otomatik oluşur."
@@ -37,68 +39,91 @@ export const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({
   const chartWidth = width - paddingLeft - paddingRight;
   const chartHeight = height - paddingTop - paddingBottom;
 
-  const maxQuantity = Math.max(...data.map((d) => d.toplam_miktar || 0), 10);
-  const maxDocs = Math.max(...data.map((d) => d.evrak_sayisi ?? d.toplam_evrak ?? 1), 5);
+  const maxQuantityRaw = Math.max(
+    ...safeData.map((d) => {
+      const v = Number(d?.toplam_miktar);
+      return Number.isFinite(v) ? v : 0;
+    }),
+    10
+  );
+  const maxQuantity = Number.isFinite(maxQuantityRaw) && maxQuantityRaw > 0 ? maxQuantityRaw : 10;
+
+  const maxDocsRaw = Math.max(
+    ...safeData.map((d) => {
+      const v = Number(d?.evrak_sayisi ?? d?.toplam_evrak);
+      return Number.isFinite(v) ? v : 1;
+    }),
+    5
+  );
+  const maxDocs = Number.isFinite(maxDocsRaw) && maxDocsRaw > 0 ? maxDocsRaw : 5;
 
   const getX = (index: number) => {
-    if (data.length <= 1) return paddingLeft + chartWidth / 2;
-    return paddingLeft + (index / (data.length - 1)) * chartWidth;
+    if (safeData.length <= 1) return paddingLeft + chartWidth / 2;
+    return paddingLeft + (index / (safeData.length - 1)) * chartWidth;
   };
 
   const getY = (val: number, max: number) => {
-    const safeMax = max > 0 ? max : 1;
-    return paddingTop + chartHeight - (val / safeMax) * chartHeight;
+    const safeVal = Number.isFinite(val) ? val : 0;
+    const safeMax = Number.isFinite(max) && max > 0 ? max : 1;
+    const clampedRatio = Math.min(Math.max(safeVal / safeMax, 0), 1);
+    return paddingTop + chartHeight - clampedRatio * chartHeight;
   };
 
   // Build SVG Path for Area and Line
-  const points = data.map((d, i) => ({
-    x: getX(i),
-    yQty: getY(d.toplam_miktar || 0, maxQuantity),
-    yDoc: getY(d.evrak_sayisi ?? d.toplam_evrak ?? 0, maxDocs),
-    data: d,
-  }));
+  const points = safeData.map((d, i) => {
+    const qty = Number(d?.toplam_miktar);
+    const docCount = Number(d?.evrak_sayisi ?? d?.toplam_evrak);
+    return {
+      x: getX(i),
+      yQty: getY(Number.isFinite(qty) ? qty : 0, maxQuantity),
+      yDoc: getY(Number.isFinite(docCount) ? docCount : 0, maxDocs),
+      data: d,
+    };
+  });
 
-  const linePath = points.length === 1
-    ? `M ${paddingLeft} ${points[0].yQty} L ${width - paddingRight} ${points[0].yQty}`
-    : points.reduce(
-        (acc, p, i) => (i === 0 ? `M ${p.x} ${p.yQty}` : `${acc} L ${p.x} ${p.yQty}`),
-        ''
-      );
+  const linePath =
+    points.length === 1
+      ? `M ${paddingLeft} ${points[0].yQty} L ${width - paddingRight} ${points[0].yQty}`
+      : points.reduce(
+          (acc, p, i) => (i === 0 ? `M ${p.x} ${p.yQty}` : `${acc} L ${p.x} ${p.yQty}`),
+          ''
+        );
 
-  const areaPath = points.length === 1
-    ? `M ${paddingLeft} ${points[0].yQty} L ${width - paddingRight} ${points[0].yQty} L ${width - paddingRight} ${paddingTop + chartHeight} L ${paddingLeft} ${paddingTop + chartHeight} Z`
-    : `${linePath} L ${points[points.length - 1].x} ${paddingTop + chartHeight} L ${points[0].x} ${paddingTop + chartHeight} Z`;
+  const areaPath =
+    points.length === 1
+      ? `M ${paddingLeft} ${points[0].yQty} L ${width - paddingRight} ${points[0].yQty} L ${width - paddingRight} ${paddingTop + chartHeight} L ${paddingLeft} ${paddingTop + chartHeight} Z`
+      : `${linePath} L ${points[points.length - 1].x} ${paddingTop + chartHeight} L ${points[0].x} ${paddingTop + chartHeight} Z`;
 
   // Grid levels (4 horizontal lines)
   const gridLines = [0, 0.33, 0.66, 1].map((ratio) => {
     const y = paddingTop + chartHeight * (1 - ratio);
     const label = Math.round(maxQuantity * ratio);
-    return { y, label };
+    return { y, label: Number.isFinite(label) ? label : 0 };
   });
 
-  const activePoint = hoveredIndex !== null ? points[hoveredIndex] : null;
+  const activePoint = hoveredIndex !== null && points[hoveredIndex] ? points[hoveredIndex] : null;
 
   return (
     <div
       data-testid="chart-timeseries"
-      className="bg-theme-card border border-theme-subtle rounded-xl p-5 shadow-sm flex flex-col justify-between relative transition-colors duration-200"
+      className="bg-theme-card border border-theme-subtle rounded-xl p-4 sm:p-5 shadow-sm flex flex-col justify-between relative transition-colors duration-200 min-w-0"
     >
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center space-x-2">
-          <div className="p-1.5 rounded-lg bg-blue-500/10 text-blue-500 border border-blue-500/20">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2 min-w-0">
+        <div className="flex items-center space-x-2 min-w-0">
+          <div className="p-1.5 rounded-lg bg-blue-500/10 text-blue-500 border border-blue-500/20 shrink-0">
             <TrendingUp className="w-4 h-4" />
           </div>
-          <div>
-            <h4 className="text-sm font-semibold text-theme-primary">
+          <div className="min-w-0">
+            <h4 className="text-sm font-semibold text-theme-primary truncate">
               Evrak ve Mal Kabul Hacmi Trendi
             </h4>
-            <p className="text-xs text-theme-muted">
+            <p className="text-xs text-theme-muted truncate">
               Günlük sevkiyat akışı ve teslim alınan toplam miktar
             </p>
           </div>
         </div>
 
-        <div className="flex items-center space-x-3 text-xs">
+        <div className="flex items-center space-x-3 text-xs shrink-0">
           <div className="flex items-center space-x-1.5">
             <span className="w-2.5 h-2.5 rounded-full bg-blue-500" />
             <span className="text-theme-secondary font-medium">Toplam Miktar</span>
@@ -162,6 +187,7 @@ export const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({
           {/* Interactive Data Points */}
           {points.map((p, i) => {
             const isHovered = hoveredIndex === i;
+            const dateStr = p.data?.tarih || 'Tarih';
             return (
               <g key={i} className="cursor-pointer">
                 {/* Vertical hover marker line */}
@@ -209,7 +235,7 @@ export const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({
                   className="text-[10px] fill-current"
                   fill="var(--chart-axis)"
                 >
-                  {p.data.tarih}
+                  {dateStr.length > 10 ? `${dateStr.substring(0, 8)}...` : dateStr}
                 </text>
               </g>
             );
@@ -232,7 +258,7 @@ export const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({
             <div className="flex justify-between space-x-4">
               <span className="text-theme-secondary">Toplam Miktar:</span>
               <span className="font-bold text-blue-500">
-                {(activePoint.data.toplam_miktar || 0).toLocaleString('tr-TR')}
+                {(Number(activePoint.data.toplam_miktar) || 0).toLocaleString('tr-TR')}
               </span>
             </div>
             <div className="flex justify-between space-x-4">
@@ -246,7 +272,7 @@ export const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({
               <div className="flex justify-between space-x-4">
                 <span className="text-theme-secondary">Onaylanan:</span>
                 <span className="font-semibold text-emerald-500">
-                  {activePoint.data.onaylanan_sayisi ?? activePoint.data.onaylanan_evrak}
+                  {activePoint.data.onaylanan_sayisi ?? activePoint.data.onaylanan_evrak ?? 0}
                 </span>
               </div>
             )}

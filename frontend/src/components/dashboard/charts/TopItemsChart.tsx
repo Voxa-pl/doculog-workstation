@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { ItemFrequencyStat } from '../../../types/irsaliye';
 import { EmptyChartState } from './EmptyChartState';
-import { Boxes, Repeat, Layers } from 'lucide-react';
+import { Boxes, Repeat } from 'lucide-react';
 
 export interface TopItemsChartProps {
-  data: ItemFrequencyStat[];
+  data?: ItemFrequencyStat[] | null;
   onActionToStation?: () => void;
 }
 
@@ -14,9 +14,11 @@ export const TopItemsChart: React.FC<TopItemsChartProps> = ({
 }) => {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
-  if (!data || data.length === 0) {
+  const safeData = Array.isArray(data) ? data : [];
+
+  if (safeData.length === 0) {
     return (
-      <div data-testid="chart-top-items" className="h-full">
+      <div data-testid="chart-top-items" className="h-full min-w-0">
         <EmptyChartState
           title="Ürün Kalemi Verisi Yok"
           description="Henüz hiçbir irsaliye kalemi ayrıştırılmadı. Sevk irsaliyeleri okundukça en çok gelen malzemeler burada sıralanır."
@@ -27,37 +29,46 @@ export const TopItemsChart: React.FC<TopItemsChartProps> = ({
     );
   }
 
-  const maxMiktar = Math.max(...data.map((item) => item.toplam_miktar || 0), 1);
+  const maxMiktarRaw = Math.max(
+    ...safeData.map((item) => {
+      const v = Number(item?.toplam_miktar);
+      return Number.isFinite(v) ? v : 0;
+    }),
+    1
+  );
+  const maxMiktar = Number.isFinite(maxMiktarRaw) && maxMiktarRaw > 0 ? maxMiktarRaw : 1;
 
   return (
     <div
       data-testid="chart-top-items"
-      className="bg-theme-card border border-theme-subtle rounded-xl p-5 shadow-sm flex flex-col justify-between transition-colors duration-200"
+      className="bg-theme-card border border-theme-subtle rounded-xl p-4 sm:p-5 shadow-sm flex flex-col justify-between transition-colors duration-200 min-w-0"
     >
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center space-x-2">
-          <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
+      <div className="flex items-center justify-between mb-4 min-w-0 gap-2">
+        <div className="flex items-center space-x-2 min-w-0">
+          <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 shrink-0">
             <Boxes className="w-4 h-4" />
           </div>
-          <div>
-            <h4 className="text-sm font-semibold text-theme-primary">
+          <div className="min-w-0">
+            <h4 className="text-sm font-semibold text-theme-primary truncate">
               En Çok Hareket Gören Malzeme Kalemleri
             </h4>
-            <p className="text-xs text-theme-muted">
+            <p className="text-xs text-theme-muted truncate">
               Mal kabulü yapılan ürünlerin miktar ve frekans sıralaması
             </p>
           </div>
         </div>
 
-        <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-theme-surface text-theme-secondary border border-theme-subtle">
-          İlk {data.length} Kalem
+        <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-theme-surface text-theme-secondary border border-theme-subtle shrink-0">
+          İlk {safeData.length} Kalem
         </span>
       </div>
 
       <div className="space-y-3 max-h-[220px] overflow-y-auto pr-1">
-        {data.map((item, idx) => {
-          const miktar = item.toplam_miktar || 0;
-          const barWidthPercent = (miktar / maxMiktar) * 100;
+        {safeData.map((item, idx) => {
+          const rawMiktar = Number(item?.toplam_miktar);
+          const miktar = Number.isFinite(rawMiktar) ? rawMiktar : 0;
+          const rawBarWidth = (miktar / maxMiktar) * 100;
+          const barWidthPercent = Math.min(100, Math.max(0, Number.isFinite(rawBarWidth) ? rawBarWidth : 0));
           const isHovered = hoveredIndex === idx;
 
           return (
@@ -65,14 +76,14 @@ export const TopItemsChart: React.FC<TopItemsChartProps> = ({
               key={idx}
               onMouseEnter={() => setHoveredIndex(idx)}
               onMouseLeave={() => setHoveredIndex(null)}
-              className={`p-2.5 rounded-lg border transition-all duration-150 ${
+              className={`p-2.5 rounded-lg border transition-all duration-150 min-w-0 ${
                 isHovered
                   ? 'bg-theme-surface border-theme-strong shadow-sm'
                   : 'bg-theme-surface/40 border-theme-subtle hover:border-theme-strong'
               }`}
             >
-              <div className="flex items-center justify-between mb-1.5 text-xs">
-                <div className="flex items-center space-x-2 truncate max-w-[65%]">
+              <div className="flex items-center justify-between mb-1.5 text-xs gap-2 min-w-0">
+                <div className="flex items-center space-x-2 min-w-0 flex-1">
                   <span
                     className={`w-5 h-5 rounded-full flex items-center justify-center font-bold text-[10px] shrink-0 ${
                       idx === 0
@@ -87,19 +98,19 @@ export const TopItemsChart: React.FC<TopItemsChartProps> = ({
                     {idx + 1}
                   </span>
                   <span
-                    className="font-medium text-theme-primary truncate"
-                    title={item.mal_hizmet}
+                    className="font-medium text-theme-primary truncate min-w-0 flex-1"
+                    title={item.mal_hizmet || 'Ürün'}
                   >
-                    {item.mal_hizmet}
+                    {item.mal_hizmet || 'Ürün'}
                   </span>
                 </div>
 
                 <div className="flex items-center space-x-2 shrink-0">
-                  <span className="flex items-center space-x-1 text-theme-secondary text-[11px]">
+                  <span className="flex items-center space-x-1 text-theme-secondary text-[11px] hidden xs:flex">
                     <Repeat className="w-3 h-3 text-theme-muted" />
-                    <span>{item.frekans} kez</span>
+                    <span>{item.frekans ?? 1} kez</span>
                   </span>
-                  <span className="font-bold text-theme-primary">
+                  <span className="font-bold text-theme-primary font-mono">
                     {miktar.toLocaleString('tr-TR')}
                   </span>
                   <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">

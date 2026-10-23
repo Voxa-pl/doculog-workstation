@@ -16,3 +16,4 @@ class QueueResponse(BaseModel):
 
 class RotateRequest(BaseModel):
     derece: int = 90  # 90 veya -90 (270)
+    sayfa_indeksi: Optional[int] = 0

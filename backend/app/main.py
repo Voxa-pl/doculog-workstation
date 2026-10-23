@@ -11,11 +11,14 @@ app = FastAPI(
     description="Türkiye Lojistik Sektörü İçin Masaüstü Evrak & Sevk İrsaliyesi Ayrıştırma İş İstasyonu API'si",
 )
 
+cors_origins = settings.CORS_ORIGINS
+allow_creds = "*" not in cors_origins
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,
-    allow_credentials=True,
-    allow_methods=["*"],
+    allow_origins=cors_origins,
+    allow_credentials=allow_creds,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 
@@ -25,18 +28,50 @@ app.include_router(router, prefix=settings.API_PREFIX)
 from fastapi.responses import HTMLResponse
 from fastapi import WebSocket, WebSocketDisconnect
 from .services.connection_manager import ws_manager
+import json
+import time
 
+@app.on_event("startup")
+async def startup_event():
+    ws_manager.get_or_set_loop()
+
+@app.websocket("/ws")
 @app.websocket("/ws/{session_id}")
-async def websocket_endpoint(websocket: WebSocket, session_id: str):
-    await ws_manager.connect(websocket, session_id)
+async def websocket_endpoint(websocket: WebSocket, session_id: str = "global"):
+    connected = await ws_manager.connect(websocket, session_id)
+    if not connected:
+        return
+
     try:
+        msg_count = 0
+        last_reset = time.time()
         while True:
             data = await websocket.receive_text()
+
+            # İleti selini (flood) önleme: Saniyede en fazla 60 mesaj
+            now = time.time()
+            if now - last_reset > 1.0:
+                msg_count = 0
+                last_reset = now
+            msg_count += 1
+            if msg_count > 60:
+                await websocket.close(code=1008, reason="Message rate limit exceeded")
+                break
+
             if data == "ping":
                 await websocket.send_text("pong")
+            else:
+                try:
+                    parsed = json.loads(data)
+                    if isinstance(parsed, dict) and parsed.get("type") == "ping":
+                        await websocket.send_json({"type": "pong"})
+                except Exception:
+                    pass
     except WebSocketDisconnect:
-        ws_manager.disconnect(websocket, session_id)
+        pass
     except Exception:
+        pass
+    finally:
         ws_manager.disconnect(websocket, session_id)
 
 @app.get("/mobile-scan", response_class=HTMLResponse)

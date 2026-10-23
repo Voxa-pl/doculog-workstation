@@ -4,14 +4,13 @@ import {
   Building2, 
   MapPin, 
   Truck, 
-  Hash,
-  AlertTriangle
+  Hash
 } from 'lucide-react';
 
 interface HeaderFormProps {
-  header: IrsaliyeHeader;
+  header?: IrsaliyeHeader | null;
   onChange: (updatedHeader: IrsaliyeHeader) => void;
-  fieldConfidences?: Record<string, number>;
+  fieldConfidences?: Record<string, number> | null;
 }
 
 export const HeaderForm: React.FC<HeaderFormProps> = ({ 
@@ -19,17 +18,22 @@ export const HeaderForm: React.FC<HeaderFormProps> = ({
   onChange,
   fieldConfidences = {}
 }) => {
+  const currentHeader: IrsaliyeHeader = header || {};
+  const safeConfidences = fieldConfidences || {};
+
   const handleChange = (field: keyof IrsaliyeHeader, value: string) => {
     onChange({
-      ...header,
-      [field]: value || null,
+      ...currentHeader,
+      [field]: value.trim() === '' ? null : value,
     });
   };
 
-  const getFieldStatus = (field: keyof IrsaliyeHeader, value?: string | null) => {
-    const conf = fieldConfidences[field];
+  const getFieldStatus = (field: keyof IrsaliyeHeader, rawValue?: string | null) => {
+    const rawConf = safeConfidences[field];
+    const conf = typeof rawConf === 'number' && Number.isFinite(rawConf) ? rawConf : undefined;
+    const value = rawValue != null ? String(rawValue) : '';
     const isCritical = ['irsaliye_no', 'duzenleme_tarihi', 'gonderici_vkn', 'alici_unvan'].includes(field);
-    const isMissing = isCritical && (!value || !value.trim());
+    const isMissing = isCritical && !value.trim();
 
     if (isMissing || (conf !== undefined && conf < 0.60)) {
       return {
@@ -63,74 +67,79 @@ export const HeaderForm: React.FC<HeaderFormProps> = ({
     placeholder: string = '',
     className: string = ''
   ) => {
-    const value = header[field];
+    const rawValue = currentHeader[field];
+    const value = rawValue != null ? String(rawValue) : '';
     const status = getFieldStatus(field, value);
 
     return (
-      <div className={className}>
-        <div className="flex items-center justify-between mb-1">
-          <label className="text-[10px] text-slate-400 font-medium block">
+      <div className={`min-w-0 ${className}`}>
+        <div className="flex items-center justify-between mb-1 gap-1">
+          <label className="text-[10px] text-slate-400 font-medium truncate block min-w-0" title={label}>
             {label}
           </label>
           {status.text && (
-            <span className={`text-[9px] font-mono px-1 py-0.2 rounded border font-semibold ${status.badgeClass}`}>
+            <span className={`text-[9px] font-mono px-1 py-0.2 rounded border font-semibold shrink-0 ${status.badgeClass}`}>
               {status.text}
             </span>
           )}
         </div>
         <input
           type="text"
-          value={value || ''}
+          value={value}
           onChange={(e) => handleChange(field, e.target.value)}
           placeholder={placeholder}
           data-suspicious={status.isSuspicious ? 'true' : undefined}
-          className={`w-full bg-slate-900 border rounded px-2 py-1.5 text-white transition-all outline-none ${status.borderClass}`}
+          className={`w-full bg-slate-900 border rounded-lg px-2.5 py-2 text-xs sm:text-sm text-white transition-all outline-none min-h-[38px] truncate ${status.borderClass}`}
         />
       </div>
     );
   };
 
+  const sevkTarihiConf = typeof safeConfidences.sevk_tarihi === 'number' && Number.isFinite(safeConfidences.sevk_tarihi)
+    ? safeConfidences.sevk_tarihi
+    : undefined;
+
   return (
     <div className="space-y-3.5 text-xs">
       {/* 1. İrsaliye ve Tarih */}
-      <div className="bg-slate-950/60 border border-slate-800/80 rounded-lg p-3 space-y-2.5">
+      <div className="bg-slate-950/60 border border-slate-800/80 rounded-lg p-3 space-y-2.5 min-w-0">
         <div className="flex items-center space-x-1.5 text-blue-400 font-semibold uppercase text-[11px] tracking-wider">
-          <Hash className="w-3.5 h-3.5" />
+          <Hash className="w-3.5 h-3.5 shrink-0" />
           <span>İrsaliye ve Tarih Bilgileri</span>
         </div>
 
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
           {renderInputField('İrsaliye Seri-Sıra No', 'irsaliye_no', 'Örn: A-045129')}
           {renderInputField('Belge Türü', 'irsaliye_tipi', 'Sevk İrsaliyesi')}
           {renderInputField('Düzenleme Tarihi', 'duzenleme_tarihi', 'GG.AA.YYYY')}
 
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="text-[10px] text-slate-400 font-medium block">
+          <div className="min-w-0">
+            <div className="flex items-center justify-between mb-1 gap-1">
+              <label className="text-[10px] text-slate-400 font-medium truncate block min-w-0">
                 Fiili Sevk Tarihi / Saati
               </label>
-              {fieldConfidences.sevk_tarihi !== undefined && (
-                <span className="text-[9px] font-mono px-1 py-0.2 rounded border text-slate-400 bg-slate-800 border-slate-700">
-                  %{Math.round(fieldConfidences.sevk_tarihi * 100)}
+              {sevkTarihiConf !== undefined && (
+                <span className="text-[9px] font-mono px-1 py-0.2 rounded border text-slate-400 bg-slate-800 border-slate-700 shrink-0">
+                  %{Math.round(sevkTarihiConf * 100)}
                 </span>
               )}
             </div>
-            <div className="flex space-x-1">
+            <div className="flex space-x-1.5">
               <input
                 type="text"
-                value={header.sevk_tarihi || ''}
+                value={currentHeader.sevk_tarihi != null ? String(currentHeader.sevk_tarihi) : ''}
                 onChange={(e) => handleChange('sevk_tarihi', e.target.value)}
                 placeholder="GG.AA.YYYY"
-                data-suspicious={getFieldStatus('sevk_tarihi', header.sevk_tarihi).isSuspicious ? 'true' : undefined}
-                className={`w-2/3 bg-slate-900 border rounded px-2 py-1.5 text-white font-mono outline-none ${getFieldStatus('sevk_tarihi', header.sevk_tarihi).borderClass}`}
+                data-suspicious={getFieldStatus('sevk_tarihi', currentHeader.sevk_tarihi).isSuspicious ? 'true' : undefined}
+                className={`w-2/3 bg-slate-900 border rounded-lg px-2.5 py-2 text-xs sm:text-sm text-white font-mono outline-none min-h-[38px] truncate ${getFieldStatus('sevk_tarihi', currentHeader.sevk_tarihi).borderClass}`}
               />
               <input
                 type="text"
-                value={header.sevk_saati || ''}
+                value={currentHeader.sevk_saati != null ? String(currentHeader.sevk_saati) : ''}
                 onChange={(e) => handleChange('sevk_saati', e.target.value)}
                 placeholder="SS:DD"
-                data-suspicious={getFieldStatus('sevk_saati', header.sevk_saati).isSuspicious ? 'true' : undefined}
-                className={`w-1/3 bg-slate-900 border rounded px-2 py-1.5 text-white font-mono text-center outline-none ${getFieldStatus('sevk_saati', header.sevk_saati).borderClass}`}
+                data-suspicious={getFieldStatus('sevk_saati', currentHeader.sevk_saati).isSuspicious ? 'true' : undefined}
+                className={`w-1/3 bg-slate-900 border rounded-lg px-2.5 py-2 text-xs sm:text-sm text-white font-mono text-center outline-none min-h-[38px] truncate ${getFieldStatus('sevk_saati', currentHeader.sevk_saati).borderClass}`}
               />
             </div>
           </div>
@@ -138,15 +147,15 @@ export const HeaderForm: React.FC<HeaderFormProps> = ({
       </div>
 
       {/* 2. Gönderici */}
-      <div className="bg-slate-950/60 border border-slate-800/80 rounded-lg p-3 space-y-2">
+      <div className="bg-slate-950/60 border border-slate-800/80 rounded-lg p-3 space-y-2 min-w-0">
         <div className="flex items-center space-x-1.5 text-emerald-400 font-semibold uppercase text-[11px] tracking-wider">
-          <Building2 className="w-3.5 h-3.5" />
+          <Building2 className="w-3.5 h-3.5 shrink-0" />
           <span>Gönderici (Çıkış Noktası / Satıcı)</span>
         </div>
 
         {renderInputField('Gönderici Firma Ticari Ünvanı', 'gonderici_unvan', 'Firma tam ticari ünvanı')}
 
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
           {renderInputField('Gönderici VKN / TCKN', 'gonderici_vkn', '10 veya 11 hane')}
           {renderInputField('Vergi Dairesi', 'gonderici_vergi_dairesi', 'Vergi Dairesi')}
         </div>
@@ -155,15 +164,15 @@ export const HeaderForm: React.FC<HeaderFormProps> = ({
       </div>
 
       {/* 3. Alıcı */}
-      <div className="bg-slate-950/60 border border-slate-800/80 rounded-lg p-3 space-y-2">
+      <div className="bg-slate-950/60 border border-slate-800/80 rounded-lg p-3 space-y-2 min-w-0">
         <div className="flex items-center space-x-1.5 text-amber-400 font-semibold uppercase text-[11px] tracking-wider">
-          <MapPin className="w-3.5 h-3.5" />
+          <MapPin className="w-3.5 h-3.5 shrink-0" />
           <span>Alıcı (Varış / Teslimat Cari)</span>
         </div>
 
         {renderInputField('Alıcı Firma Ticari Ünvanı', 'alici_unvan', 'Teslim alacak müşteri/firma ünvanı')}
 
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
           {renderInputField('Alıcı VKN / TCKN', 'alici_vkn', '10 veya 11 hane')}
           {renderInputField('Vergi Dairesi', 'alici_vergi_dairesi', 'Vergi Dairesi')}
         </div>
@@ -172,13 +181,13 @@ export const HeaderForm: React.FC<HeaderFormProps> = ({
       </div>
 
       {/* 4. Nakliye ve Lojistik */}
-      <div className="bg-slate-950/60 border border-slate-800/80 rounded-lg p-3 space-y-2">
+      <div className="bg-slate-950/60 border border-slate-800/80 rounded-lg p-3 space-y-2 min-w-0">
         <div className="flex items-center space-x-1.5 text-purple-400 font-semibold uppercase text-[11px] tracking-wider">
-          <Truck className="w-3.5 h-3.5" />
+          <Truck className="w-3.5 h-3.5 shrink-0" />
           <span>Taşıyıcı, Plaka ve Şoför</span>
         </div>
 
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
           {renderInputField('Taşıyıcı / Ambar Ünvanı', 'tasiyici_unvan', 'Ambar / Lojistik firması')}
           {renderInputField('Araç Plakası', 'plaka', 'Örn: 34 TRS 882')}
           {renderInputField('Şoför Adı Soyadı', 'sofor_ad_soyad', 'Şoför adı')}

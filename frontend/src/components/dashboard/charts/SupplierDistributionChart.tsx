@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { SupplierStat } from '../../../types/irsaliye';
 import { EmptyChartState } from './EmptyChartState';
-import { Building2, Package, FileText } from 'lucide-react';
+import { Building2, FileText } from 'lucide-react';
 
 export interface SupplierDistributionChartProps {
-  data: SupplierStat[];
+  data?: SupplierStat[] | null;
   onActionToStation?: () => void;
 }
 
@@ -14,9 +14,11 @@ export const SupplierDistributionChart: React.FC<SupplierDistributionChartProps>
 }) => {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
-  if (!data || data.length === 0) {
+  const safeData = Array.isArray(data) ? data : [];
+
+  if (safeData.length === 0) {
     return (
-      <div data-testid="chart-suppliers" className="h-full">
+      <div data-testid="chart-suppliers" className="h-full min-w-0">
         <EmptyChartState
           title="Tedarikçi Dağılımı Yok"
           description="Henüz hiçbir tedarikçi cari kaydı bulunmuyor. Gelen irsaliyeler analiz edildikçe tedarikçi hacimleri burada listelenir."
@@ -28,43 +30,61 @@ export const SupplierDistributionChart: React.FC<SupplierDistributionChartProps>
   }
 
   // Calculate highest quantity to scale relative bar widths
-  const maxMiktar = Math.max(...data.map((s) => s.toplam_miktar || 0), 1);
-  const totalVolume = data.reduce((acc, s) => acc + (s.toplam_miktar || 0), 0);
+  const maxMiktarRaw = Math.max(
+    ...safeData.map((s) => {
+      const v = Number(s?.toplam_miktar);
+      return Number.isFinite(v) ? v : 0;
+    }),
+    1
+  );
+  const maxMiktar = Number.isFinite(maxMiktarRaw) && maxMiktarRaw > 0 ? maxMiktarRaw : 1;
+
+  const totalVolume = safeData.reduce((acc, s) => {
+    const v = Number(s?.toplam_miktar);
+    return acc + (Number.isFinite(v) ? v : 0);
+  }, 0);
 
   return (
     <div
       data-testid="chart-suppliers"
-      className="bg-theme-card border border-theme-subtle rounded-xl p-5 shadow-sm flex flex-col justify-between transition-colors duration-200"
+      className="bg-theme-card border border-theme-subtle rounded-xl p-4 sm:p-5 shadow-sm flex flex-col justify-between transition-colors duration-200 min-w-0"
     >
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center space-x-2">
-          <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-500 border border-amber-500/20">
+      <div className="flex items-center justify-between mb-4 min-w-0 gap-2">
+        <div className="flex items-center space-x-2 min-w-0">
+          <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-500 border border-amber-500/20 shrink-0">
             <Building2 className="w-4 h-4" />
           </div>
-          <div>
-            <h4 className="text-sm font-semibold text-theme-primary">
+          <div className="min-w-0">
+            <h4 className="text-sm font-semibold text-theme-primary truncate">
               Tedarikçi Sevkiyat Hacim Dağılımı
             </h4>
-            <p className="text-xs text-theme-muted">
+            <p className="text-xs text-theme-muted truncate">
               En yüksek mal indiren cariler ve toplam sevkiyat payları
             </p>
           </div>
         </div>
 
-        <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-theme-surface text-theme-secondary border border-theme-subtle">
-          {data.length} Tedarikçi
+        <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-theme-surface text-theme-secondary border border-theme-subtle shrink-0">
+          {safeData.length} Tedarikçi
         </span>
       </div>
 
       <div className="space-y-3 max-h-[220px] overflow-y-auto pr-1">
-        {data.map((item, idx) => {
-          const miktar = item.toplam_miktar || 0;
-          const sharePercentage =
-            item.pay_yuzde ??
-            item.yuzde ??
-            (totalVolume > 0 ? (miktar / totalVolume) * 100 : 0);
+        {safeData.map((item, idx) => {
+          const rawMiktar = Number(item?.toplam_miktar);
+          const miktar = Number.isFinite(rawMiktar) ? rawMiktar : 0;
 
-          const barWidthPercent = (miktar / maxMiktar) * 100;
+          const rawShare = Number.isFinite(Number(item.pay_yuzde))
+            ? Number(item.pay_yuzde)
+            : Number.isFinite(Number(item.yuzde))
+            ? Number(item.yuzde)
+            : totalVolume > 0
+            ? (miktar / totalVolume) * 100
+            : 0;
+          const sharePercentage = Number.isFinite(rawShare) ? rawShare : 0;
+
+          const rawBarWidth = maxMiktar > 0 ? (miktar / maxMiktar) * 100 : 0;
+          const barWidthPercent = Math.min(100, Math.max(0, Number.isFinite(rawBarWidth) ? rawBarWidth : 0));
           const isHovered = hoveredIndex === idx;
 
           return (
@@ -72,14 +92,14 @@ export const SupplierDistributionChart: React.FC<SupplierDistributionChartProps>
               key={idx}
               onMouseEnter={() => setHoveredIndex(idx)}
               onMouseLeave={() => setHoveredIndex(null)}
-              className={`p-2.5 rounded-lg border transition-all duration-150 ${
+              className={`p-2.5 rounded-lg border transition-all duration-150 min-w-0 ${
                 isHovered
                   ? 'bg-theme-surface border-theme-strong shadow-sm'
                   : 'bg-theme-surface/40 border-theme-subtle hover:border-theme-strong'
               }`}
             >
-              <div className="flex items-center justify-between mb-1.5 text-xs">
-                <div className="flex items-center space-x-2 truncate max-w-[65%]">
+              <div className="flex items-center justify-between mb-1.5 text-xs gap-2 min-w-0">
+                <div className="flex items-center space-x-2 min-w-0 flex-1">
                   <span
                     className={`w-5 h-5 rounded-full flex items-center justify-center font-bold text-[10px] shrink-0 ${
                       idx === 0
@@ -94,24 +114,24 @@ export const SupplierDistributionChart: React.FC<SupplierDistributionChartProps>
                     {idx + 1}
                   </span>
                   <span
-                    className="font-medium text-theme-primary truncate"
-                    title={item.unvan}
+                    className="font-medium text-theme-primary truncate min-w-0 flex-1"
+                    title={item.unvan || 'Bilinmeyen Tedarikçi'}
                   >
                     {item.unvan || 'Bilinmeyen Tedarikçi'}
                   </span>
                   {item.vkn && (
-                    <span className="text-[10px] text-theme-muted font-mono hidden sm:inline">
+                    <span className="text-[10px] text-theme-muted font-mono hidden sm:inline shrink-0">
                       ({item.vkn})
                     </span>
                   )}
                 </div>
 
                 <div className="flex items-center space-x-2 shrink-0">
-                  <span className="flex items-center space-x-1 text-theme-secondary text-[11px]">
+                  <span className="flex items-center space-x-1 text-theme-secondary text-[11px] hidden xs:flex">
                     <FileText className="w-3 h-3 text-theme-muted" />
                     <span>{item.evrak_sayisi ?? item.irsaliye_sayisi ?? 1} evrak</span>
                   </span>
-                  <span className="font-semibold text-theme-primary">
+                  <span className="font-semibold text-theme-primary font-mono">
                     {miktar.toLocaleString('tr-TR')}
                   </span>
                   <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-500 border border-blue-500/20">

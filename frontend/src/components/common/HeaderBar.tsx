@@ -2,25 +2,26 @@ import React, { useState, useRef, useEffect } from 'react';
 import { 
   Truck, 
   FileSpreadsheet, 
-  FileCode,
-  FileJson,
-  ChevronDown,
+  FileCode, 
+  FileJson, 
+  ChevronDown, 
   Sparkles, 
-  Settings, 
   Trash2, 
   CheckCircle2, 
   Clock, 
-  Layers,
-  LayoutDashboard,
-  Palette,
-  Check,
-  QrCode
+  Layers, 
+  LayoutDashboard, 
+  Palette, 
+  Check, 
+  QrCode,
+  Menu,
+  X
 } from 'lucide-react';
 import { BatchSummary, ApiKeyStatus, AppTheme, AppView } from '../../types/irsaliye';
 import { documentApi } from '../../services/api';
 
 interface HeaderBarProps {
-  summary: BatchSummary;
+  summary?: BatchSummary | null;
   apiKeyStatus: ApiKeyStatus | null;
   onOpenApiKeyModal: () => void;
   onOpenQrBridgeModal?: () => void;
@@ -36,12 +37,9 @@ interface HeaderBarProps {
 
 export const HeaderBar: React.FC<HeaderBarProps> = ({
   summary,
-  apiKeyStatus,
-  onOpenApiKeyModal,
   onOpenQrBridgeModal,
   onProcessAll,
   onClearAll,
-  onExportBatchExcel,
   isProcessingBatch,
   activeView = 'station',
   onViewChange,
@@ -50,9 +48,19 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
 }) => {
   const [isExportOpen, setIsExportOpen] = useState(false);
   const [isThemeMenuOpen, setIsThemeMenuOpen] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const exportRef = useRef<HTMLDivElement>(null);
   const themeRef = useRef<HTMLDivElement>(null);
-  const totalCompleted = summary.tamamlanan + summary.onaylanan;
+
+  const safeSummary: BatchSummary = summary || {
+    toplam_belge: 0,
+    kuyrukta: 0,
+    islenen: 0,
+    tamamlanan: 0,
+    hatali: 0,
+    onaylanan: 0,
+  };
+  const totalCompleted = (safeSummary.tamamlanan || 0) + (safeSummary.onaylanan || 0);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -68,63 +76,63 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
   }, []);
 
   return (
-    <header className="h-14 bg-theme-surface border-b border-theme-subtle px-4 flex items-center justify-between select-none shrink-0 shadow-sm transition-colors duration-200">
-      {/* Sol Kısım: Logo, Başlık ve Görünüm Değiştirici */}
-      <div className="flex items-center space-x-4">
-        <div className="flex items-center space-x-2.5">
-          <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white shadow-md shadow-blue-600/20">
+    <header className="h-14 bg-theme-surface border-b border-theme-subtle px-3 sm:px-4 flex items-center justify-between select-none shrink-0 shadow-sm transition-colors duration-200 relative z-30 min-w-0">
+      {/* Sol Kısım: Logo ve Görünüm Seçici */}
+      <div className="flex items-center space-x-2 sm:space-x-4 min-w-0">
+        <div className="flex items-center space-x-2 shrink-0">
+          <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white shadow-md shadow-blue-600/20 shrink-0">
             <Truck className="w-4 h-4" />
           </div>
           <div>
-            <h1 className="font-semibold text-sm tracking-wide text-theme-primary">
-              DocuLog Workstation
+            <h1 className="font-bold text-xs sm:text-sm tracking-wide text-theme-primary">
+              DocuLog
             </h1>
           </div>
         </div>
 
         {/* Görünüm Seçici Segmented Toggle */}
-        <div className="flex items-center bg-theme-card p-0.5 rounded-lg border border-theme-subtle text-xs font-medium">
+        <div className="flex items-center bg-theme-card p-0.5 rounded-lg border border-theme-subtle text-xs font-medium shrink-0">
           <button
             type="button"
             data-testid="view-switcher-station"
             onClick={() => onViewChange?.('station')}
-            className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-md transition-all ${
+            className={`flex items-center space-x-1 sm:space-x-1.5 px-2 sm:px-3 py-1 sm:py-1.5 rounded-md tactile-btn ${
               activeView === 'station'
                 ? 'bg-blue-600 text-white shadow-sm font-semibold'
                 : 'text-theme-muted hover:text-theme-primary hover:bg-theme-card-hover'
             }`}
           >
             <Layers className="w-3.5 h-3.5" />
-            <span>İrsaliye İstasyonu</span>
+            <span className="hidden xs:inline">İstasyon</span>
           </button>
           <button
             type="button"
             data-testid="view-switcher-cockpit"
             onClick={() => onViewChange?.('dashboard')}
-            className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-md transition-all ${
+            className={`flex items-center space-x-1 sm:space-x-1.5 px-2 sm:px-3 py-1 sm:py-1.5 rounded-md tactile-btn ${
               activeView === 'dashboard'
                 ? 'bg-blue-600 text-white shadow-sm font-semibold'
                 : 'text-theme-muted hover:text-theme-primary hover:bg-theme-card-hover'
             }`}
           >
             <LayoutDashboard className="w-3.5 h-3.5" />
-            <span>Yönetici Kokpiti</span>
+            <span className="hidden xs:inline">Kokpit</span>
           </button>
         </div>
       </div>
 
-      {/* Orta Kısım: Operasyonel İrsaliye Sayaçları */}
-      <div className="hidden xl:flex items-center space-x-3 bg-theme-card/60 border border-theme-subtle px-3 py-1.5 rounded-lg text-xs">
+      {/* Orta Kısım: Operasyonel İrsaliye Sayaçları (Masaüstü) */}
+      <div className="hidden lg:flex items-center space-x-3 bg-theme-card/60 border border-theme-subtle px-3 py-1.5 rounded-lg text-xs shrink-0">
         <div className="flex items-center space-x-1.5 text-theme-secondary">
           <Layers className="w-3.5 h-3.5 text-theme-muted" />
           <span>Toplam:</span>
-          <span className="font-semibold text-theme-primary">{summary.toplam_belge}</span>
+          <span className="font-semibold text-theme-primary">{safeSummary.toplam_belge ?? 0}</span>
         </div>
         <div className="w-px h-3.5 bg-theme-subtle" />
         <div className="flex items-center space-x-1.5 text-amber-500">
           <Clock className="w-3.5 h-3.5" />
-          <span>Kuyrukta:</span>
-          <span className="font-semibold">{summary.kuyrukta}</span>
+          <span>Kuyruk:</span>
+          <span className="font-semibold">{safeSummary.kuyrukta ?? 0}</span>
         </div>
         <div className="w-px h-3.5 bg-theme-subtle" />
         <div className="flex items-center space-x-1.5 text-emerald-500">
@@ -134,43 +142,30 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
         </div>
       </div>
 
-      {/* Sağ Kısım: Aksiyonlar, Tema Seçici ve Ayarlar */}
-      <div className="flex items-center space-x-2">
-        {/* Telefondan Canlı Yükleme (Mobile QR Bridge) */}
-        {onOpenQrBridgeModal && (
-          <button
-            type="button"
-            onClick={onOpenQrBridgeModal}
-            className="hidden sm:flex items-center space-x-1.5 bg-theme-card hover:bg-theme-card-hover text-theme-secondary hover:text-theme-primary px-2.5 py-1.5 rounded-md text-xs font-medium border border-theme-subtle shadow-sm transition-all"
-            title="Telefondan Canlı Yükleme (Mobile QR Bridge)"
-          >
-            <QrCode className="w-3.5 h-3.5 text-blue-500" />
-            <span>Telefondan Tara (QR)</span>
-          </button>
-        )}
-
-        {/* Tümünü İşle */}
+      {/* Sağ Kısım: Aksiyonlar & Menü */}
+      <div className="flex items-center space-x-1 sm:space-x-2 shrink-0">
+        {/* Tümünü İşle (Masaüstü & Mobil Hızlı Buton) */}
         <button
           type="button"
           onClick={onProcessAll}
-          disabled={isProcessingBatch || summary.kuyrukta === 0}
-          className="flex items-center space-x-1.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:hover:bg-blue-600 text-white px-3 py-1.5 rounded-md text-xs font-medium shadow-sm transition-all"
+          disabled={isProcessingBatch || (safeSummary.kuyrukta ?? 0) === 0}
+          className="flex items-center space-x-1 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold shadow-sm shrink-0 tactile-btn"
         >
           {isProcessingBatch ? (
             <>
               <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              <span>İşleniyor...</span>
+              <span className="hidden sm:inline">İşleniyor...</span>
             </>
           ) : (
             <>
               <Sparkles className="w-3.5 h-3.5" />
-              <span>Tümünü İşle</span>
+              <span className="hidden sm:inline">Tümünü İşle</span>
             </>
           )}
         </button>
 
         {/* Çoklu Format Toplu Dışa Aktar */}
-        <div className="relative" ref={exportRef}>
+        <div className="relative hidden sm:block" ref={exportRef}>
           <button
             type="button"
             onClick={() => {
@@ -179,20 +174,20 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
               }
             }}
             disabled={totalCompleted === 0}
-            className="flex items-center space-x-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:hover:bg-emerald-600 text-white px-3 py-1.5 rounded-md text-xs font-medium shadow-sm transition-all"
+            className="flex items-center space-x-1 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold shadow-sm tactile-btn-emerald"
           >
             <FileSpreadsheet className="w-3.5 h-3.5" />
-            <span>Excel İndir (.xlsx)</span>
+            <span className="hidden md:inline">Excel İndir</span>
             <ChevronDown className="w-3 h-3 text-emerald-200" />
           </button>
 
           {isExportOpen && (
-            <div className="absolute right-0 top-full mt-1.5 w-48 bg-theme-surface border border-theme-strong rounded-lg shadow-2xl z-40 p-1 space-y-0.5">
+            <div className="absolute right-0 top-full mt-1.5 w-48 bg-theme-surface border border-theme-strong rounded-xl shadow-2xl z-40 p-1 space-y-0.5">
               <a
                 href={documentApi.getBatchExcelUrl()}
                 download
                 onClick={() => setIsExportOpen(false)}
-                className="flex items-center space-x-2 px-2.5 py-1.5 rounded text-xs text-theme-primary hover:bg-theme-card-hover transition-colors"
+                className="flex items-center space-x-2 px-2.5 py-1.5 rounded-lg text-xs text-theme-primary hover:bg-theme-card-hover transition-colors"
               >
                 <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-500" />
                 <span>Toplu Excel (.xlsx)</span>
@@ -201,7 +196,7 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
                 href={documentApi.getBatchLogoXmlUrl()}
                 download
                 onClick={() => setIsExportOpen(false)}
-                className="flex items-center space-x-2 px-2.5 py-1.5 rounded text-xs text-theme-primary hover:bg-theme-card-hover transition-colors"
+                className="flex items-center space-x-2 px-2.5 py-1.5 rounded-lg text-xs text-theme-primary hover:bg-theme-card-hover transition-colors"
               >
                 <FileCode className="w-3.5 h-3.5 text-blue-500" />
                 <span>Logo XML (.xml)</span>
@@ -210,7 +205,7 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
                 href={documentApi.getBatchJsonUrl()}
                 download
                 onClick={() => setIsExportOpen(false)}
-                className="flex items-center space-x-2 px-2.5 py-1.5 rounded text-xs text-theme-primary hover:bg-theme-card-hover transition-colors"
+                className="flex items-center space-x-2 px-2.5 py-1.5 rounded-lg text-xs text-theme-primary hover:bg-theme-card-hover transition-colors"
               >
                 <FileJson className="w-3.5 h-3.5 text-amber-500" />
                 <span>Standart JSON (.json)</span>
@@ -219,115 +214,125 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
           )}
         </div>
 
-        {summary.toplam_belge > 0 && (
+        {/* Telefondan Canlı Yükleme (Mobile QR Bridge) */}
+        {onOpenQrBridgeModal && (
           <button
             type="button"
-            onClick={onClearAll}
-            className="p-1.5 text-theme-muted hover:text-rose-400 hover:bg-theme-card rounded-md transition-colors"
-            title="Kuyruğu Temizle"
+            onClick={onOpenQrBridgeModal}
+            className="hidden md:flex items-center space-x-1.5 bg-theme-card hover:bg-theme-card-hover text-theme-secondary hover:text-theme-primary px-2.5 py-1.5 rounded-lg text-xs font-medium border border-theme-subtle shadow-sm transition-all shrink-0"
+            title="Telefondan Canlı Yükleme (Mobile QR Bridge)"
           >
-            <Trash2 className="w-4 h-4" />
+            <QrCode className="w-3.5 h-3.5 text-blue-500" />
+            <span>QR Bağla</span>
           </button>
         )}
 
-        <div className="w-px h-4 bg-theme-subtle mx-1" />
-
         {/* Tema Seçici Dropdown */}
-        <div className="relative" ref={themeRef}>
+        <div className="relative hidden md:block" ref={themeRef}>
           <button
             type="button"
             data-testid="theme-switcher-button"
             onClick={() => setIsThemeMenuOpen((prev) => !prev)}
-            className="flex items-center space-x-1.5 px-2.5 py-1.5 text-xs font-medium text-theme-secondary hover:text-theme-primary bg-theme-card hover:bg-theme-card-hover border border-theme-subtle rounded-md transition-all shadow-sm"
-            title="Görünüm Teması Değiştir"
-            aria-label="Görünüm Teması"
+            className="flex items-center space-x-1.5 px-2 py-1.5 text-xs font-medium text-theme-secondary hover:text-theme-primary bg-theme-card hover:bg-theme-card-hover border border-theme-subtle rounded-lg transition-all"
+            title="Görünüm Teması"
           >
             <Palette className="w-3.5 h-3.5 text-amber-500" />
-            <span className="hidden md:inline">
-              {theme === 'gece-vardiyasi' ? 'Gece Vardiyası' : theme === 'acik-ofis' ? 'Açık Ofis' : 'Koyu Kurumsal'}
-            </span>
             <ChevronDown className="w-3 h-3 text-theme-muted" />
           </button>
 
           {isThemeMenuOpen && (
-            <div className="absolute right-0 top-full mt-1.5 w-44 bg-theme-surface border border-theme-strong rounded-lg shadow-2xl z-50 p-1 space-y-0.5">
-              <button
-                type="button"
-                data-testid="theme-option-koyu-kurumsal"
-                onClick={() => {
-                  onThemeChange?.('koyu-kurumsal');
-                  setIsThemeMenuOpen(false);
-                }}
-                className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded text-xs transition-colors ${
-                  theme === 'koyu-kurumsal'
-                    ? 'bg-blue-600/20 text-blue-500 font-semibold'
-                    : 'text-theme-primary hover:bg-theme-card-hover'
-                }`}
-              >
-                <span className="flex items-center space-x-2">
-                  <span>🌙</span>
-                  <span>Koyu Kurumsal</span>
-                </span>
-                {theme === 'koyu-kurumsal' && <Check className="w-3.5 h-3.5 text-blue-500" />}
-              </button>
-
-              <button
-                type="button"
-                data-testid="theme-option-gece-vardiyasi"
-                onClick={() => {
-                  onThemeChange?.('gece-vardiyasi');
-                  setIsThemeMenuOpen(false);
-                }}
-                className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded text-xs transition-colors ${
-                  theme === 'gece-vardiyasi'
-                    ? 'bg-amber-500/20 text-amber-500 font-semibold'
-                    : 'text-theme-primary hover:bg-theme-card-hover'
-                }`}
-              >
-                <span className="flex items-center space-x-2">
-                  <span>⚡</span>
-                  <span>Gece Vardiyası</span>
-                </span>
-                {theme === 'gece-vardiyasi' && <Check className="w-3.5 h-3.5 text-amber-500" />}
-              </button>
-
-              <button
-                type="button"
-                data-testid="theme-option-acik-ofis"
-                onClick={() => {
-                  onThemeChange?.('acik-ofis');
-                  setIsThemeMenuOpen(false);
-                }}
-                className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded text-xs transition-colors ${
-                  theme === 'acik-ofis'
-                    ? 'bg-blue-600/20 text-blue-500 font-semibold'
-                    : 'text-theme-primary hover:bg-theme-card-hover'
-                }`}
-              >
-                <span className="flex items-center space-x-2">
-                  <span>☀️</span>
-                  <span>Açık Ofis</span>
-                </span>
-                {theme === 'acik-ofis' && <Check className="w-3.5 h-3.5 text-blue-500" />}
-              </button>
+            <div className="absolute right-0 top-full mt-1.5 w-44 bg-theme-surface border border-theme-strong rounded-xl shadow-2xl z-40 p-1 space-y-0.5">
+              {[
+                { id: 'koyu-kurumsal', label: 'Koyu Kurumsal' },
+                { id: 'gece-vardiyasi', label: 'Gece Vardiyası' },
+                { id: 'acik-ofis', label: 'Açık Ofis' },
+              ].map((t) => (
+                <button
+                  key={t.id}
+                  onClick={() => {
+                    onThemeChange?.(t.id as AppTheme);
+                    setIsThemeMenuOpen(false);
+                  }}
+                  className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition-colors ${
+                    theme === t.id
+                      ? 'bg-blue-600 text-white font-medium'
+                      : 'text-theme-primary hover:bg-theme-card-hover'
+                  }`}
+                >
+                  <span>{t.label}</span>
+                  {theme === t.id && <Check className="w-3.5 h-3.5" />}
+                </button>
+              ))}
             </div>
           )}
         </div>
 
+        {/* Mobil Menü Butonu (Hamburger) */}
         <button
           type="button"
-          onClick={onOpenApiKeyModal}
-          className={`p-2 rounded-md transition-all ${
-            apiKeyStatus?.is_configured
-              ? 'text-theme-muted hover:text-theme-primary hover:bg-theme-card'
-              : 'text-amber-500 hover:text-amber-400 bg-amber-500/10 hover:bg-amber-500/20'
-          }`}
-          title="Ayarlar"
-          aria-label="Ayarlar"
+          onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+          className="p-1.5 text-theme-secondary hover:text-theme-primary bg-theme-card border border-theme-subtle rounded-lg sm:hidden shrink-0"
         >
-          <Settings className="w-4 h-4" />
+          {isMobileMenuOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
         </button>
       </div>
+
+      {/* Mobil Açılır Menü */}
+      {isMobileMenuOpen && (
+        <div className="absolute top-14 left-0 right-0 bg-theme-surface border-b border-theme-subtle p-3 space-y-2 sm:hidden shadow-2xl z-50">
+          <div className="grid grid-cols-3 gap-2 text-center text-xs p-2 rounded-lg bg-theme-card border border-theme-subtle">
+            <div>
+              <div className="text-theme-muted text-[10px]">Toplam</div>
+              <div className="font-bold text-theme-primary">{safeSummary.toplam_belge ?? 0}</div>
+            </div>
+            <div>
+              <div className="text-amber-500 text-[10px]">Kuyrukta</div>
+              <div className="font-bold text-amber-500">{safeSummary.kuyrukta ?? 0}</div>
+            </div>
+            <div>
+              <div className="text-emerald-500 text-[10px]">Tamamlanan</div>
+              <div className="font-bold text-emerald-500">{totalCompleted}</div>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-1.5 pt-1">
+            <a
+              href={documentApi.getBatchExcelUrl()}
+              download
+              className="flex items-center space-x-2 w-full p-2 rounded-lg bg-emerald-600/10 text-emerald-400 border border-emerald-500/20 text-xs font-semibold"
+            >
+              <FileSpreadsheet className="w-4 h-4" />
+              <span>Toplu Excel İndir (.xlsx)</span>
+            </a>
+
+            <button
+              onClick={() => {
+                onThemeChange?.(theme === 'koyu-kurumsal' ? 'acik-ofis' : 'koyu-kurumsal');
+                setIsMobileMenuOpen(false);
+              }}
+              className="flex items-center justify-between w-full p-2 rounded-lg bg-theme-card text-theme-primary text-xs font-medium border border-theme-subtle"
+            >
+              <span className="flex items-center gap-2">
+                <Palette className="w-4 h-4 text-amber-500" />
+                <span>Tema Değiştir ({theme === 'koyu-kurumsal' ? 'Koyu' : 'Açık'})</span>
+              </span>
+            </button>
+
+            {(safeSummary.toplam_belge ?? 0) > 0 && (
+              <button
+                onClick={() => {
+                  onClearAll();
+                  setIsMobileMenuOpen(false);
+                }}
+                className="flex items-center space-x-2 w-full p-2 rounded-lg bg-rose-500/10 text-rose-400 border border-rose-500/20 text-xs font-medium"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Kuyruğu Temizle</span>
+              </button>
+            )}
+          </div>
+        </div>
+      )}
     </header>
   );
 };

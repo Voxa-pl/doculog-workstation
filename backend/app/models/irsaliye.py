@@ -69,6 +69,7 @@ class DocumentItem(BaseModel):
     hata_mesaji: Optional[str] = None
     veri: Optional[IrsaliyeData] = None
     sayfalar: List[str] = Field(default_factory=list, description="Çok sayfalı irsaliye görsellerinin URL listesi")
+    guncellenme_ts: Optional[int] = Field(default=None, description="Son güncelleme zaman damgası (ms)")
 
 class DocumentUpdateRequest(BaseModel):
     """Operatörün sağ sütunda inline-edit ile yaptığı güncellemeler"""
