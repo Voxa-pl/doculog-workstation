@@ -43,6 +43,34 @@ async function captureScreenshots() {
     const desktopInvoice = path.join(SCREENSHOTS_DIR, '02_desktop_invoice_verified.png');
     await page.screenshot({ path: desktopInvoice });
     console.log('[OK] 02_desktop_invoice_verified.png');
+
+    // 2b. 3-WAY PO MODAL GÖRÜNÜMÜ
+    try {
+      const openedModal = await page.evaluate(() => {
+        const btns = Array.from(document.querySelectorAll('button'));
+        const poBtn = btns.find(b => b.textContent && b.textContent.includes('3-Way ERP Eşleşmesi'));
+        if (poBtn) {
+          poBtn.click();
+          return true;
+        }
+        return false;
+      });
+      if (openedModal) {
+        await new Promise(r => setTimeout(r, 1200));
+        const desktopPo = path.join(SCREENSHOTS_DIR, '05_desktop_3way_po_modal.png');
+        await page.screenshot({ path: desktopPo });
+        console.log('[OK] 05_desktop_3way_po_modal.png');
+        // Modalı kapat
+        await page.evaluate(() => {
+          const btns = Array.from(document.querySelectorAll('button'));
+          const closeBtn = btns.find(b => b.textContent && b.textContent.trim() === 'Kapat');
+          if (closeBtn) closeBtn.click();
+        });
+        await new Promise(r => setTimeout(r, 600));
+      }
+    } catch (err) {
+      console.error('3-Way PO modalı açılamadı:', err.message);
+    }
   } catch (e) {
     console.error('İrsaliye kartına tıklanamadı:', e.message);
   }

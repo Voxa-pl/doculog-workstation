@@ -4,8 +4,11 @@ import {
   Building2, 
   MapPin, 
   Truck, 
-  Hash
+  Hash,
+  CheckCircle2,
+  AlertCircle
 } from 'lucide-react';
+import { isValidVKN, isValidTCKN } from '../../utils/validation';
 
 interface HeaderFormProps {
   header?: IrsaliyeHeader | null;
@@ -31,9 +34,42 @@ export const HeaderForm: React.FC<HeaderFormProps> = ({
   const getFieldStatus = (field: keyof IrsaliyeHeader, rawValue?: string | null) => {
     const rawConf = safeConfidences[field];
     const conf = typeof rawConf === 'number' && Number.isFinite(rawConf) ? rawConf : undefined;
-    const value = rawValue != null ? String(rawValue) : '';
+    const value = rawValue != null ? String(rawValue).trim() : '';
     const isCritical = ['irsaliye_no', 'duzenleme_tarihi', 'gonderici_vkn', 'alici_unvan'].includes(field);
-    const isMissing = isCritical && !value.trim();
+    const isMissing = isCritical && !value;
+
+    // Özel VKN / TCKN Matematiksel Doğrulama Denetimi
+    if (field === 'gonderici_vkn' || field === 'alici_vkn') {
+      const cleanNum = value.replace(/\D/g, '');
+      if (cleanNum.length === 10) {
+        const valid = isValidVKN(cleanNum);
+        return {
+          borderClass: valid ? 'border-emerald-500/50 focus:border-emerald-500' : 'border-rose-500/80 bg-rose-500/5 focus:border-rose-500 ring-1 ring-rose-500/30',
+          badgeClass: valid ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30 font-semibold' : 'text-rose-400 bg-rose-500/10 border-rose-500/30 font-semibold',
+          text: valid ? '✓ VKN Geçerli' : '⚠ VKN Sağlama Hatası',
+          isSuspicious: !valid
+        };
+      } else if (cleanNum.length === 11) {
+        const valid = isValidTCKN(cleanNum);
+        return {
+          borderClass: valid ? 'border-emerald-500/50 focus:border-emerald-500' : 'border-rose-500/80 bg-rose-500/5 focus:border-rose-500 ring-1 ring-rose-500/30',
+          badgeClass: valid ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30 font-semibold' : 'text-rose-400 bg-rose-500/10 border-rose-500/30 font-semibold',
+          text: valid ? '✓ TCKN Geçerli' : '⚠ TCKN Sağlama Hatası',
+          isSuspicious: !valid
+        };
+      }
+    } else if (field === 'sofor_tc' && value) {
+      const cleanNum = value.replace(/\D/g, '');
+      if (cleanNum.length === 11) {
+        const valid = isValidTCKN(cleanNum);
+        return {
+          borderClass: valid ? 'border-emerald-500/50 focus:border-emerald-500' : 'border-rose-500/80 bg-rose-500/5 focus:border-rose-500 ring-1 ring-rose-500/30',
+          badgeClass: valid ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30 font-semibold' : 'text-rose-400 bg-rose-500/10 border-rose-500/30 font-semibold',
+          text: valid ? '✓ TCKN Doğrulandı' : '⚠ TCKN Hatalı',
+          isSuspicious: !valid
+        };
+      }
+    }
 
     if (isMissing || (conf !== undefined && conf < 0.60)) {
       return {

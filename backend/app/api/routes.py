@@ -39,6 +39,7 @@ from ..services.gemini_extractor import (
 from ..services.image_processor import image_processor
 from ..services.excel_exporter import excel_exporter
 from ..services.erp_exporter import erp_exporter
+from ..services.validation import validate_vkn, validate_tckn, reconcile_purchase_order_3way
 
 router = APIRouter()
 
@@ -842,3 +843,23 @@ async def mobile_upload(
     })
 
     return doc_item
+
+@router.get("/documents/{doc_id}/reconcile-po")
+async def reconcile_document_po(doc_id: str):
+    doc = doc_repo.get_by_id(doc_id)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Belge bulunamadı.")
+    
+    header = doc.veri.header.model_dump() if doc.veri and doc.veri.header else {}
+    kalemler = [k.model_dump() for k in doc.veri.kalemler] if doc.veri and doc.veri.kalemler else []
+    
+    return reconcile_purchase_order_3way(header, kalemler)
+
+@router.get("/validation/vkn/{vkn}")
+async def check_vkn(vkn: str):
+    return {
+        "vkn": vkn,
+        "is_valid_vkn": validate_vkn(vkn),
+        "is_valid_tckn": validate_tckn(vkn)
+    }
+

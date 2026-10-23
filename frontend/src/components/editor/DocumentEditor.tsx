@@ -26,9 +26,33 @@ import {
   Trash2,
   Copy,
   Check,
-  Zap
+  Zap,
+  Building2,
+  X
 } from 'lucide-react';
 import { documentApi } from '../../services/api';
+
+// Web Audio API Low-Frequency Haptic Pulse
+const playCadenceHaptic = () => {
+  try {
+    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioContextClass) return;
+    const ctx = new AudioContextClass();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(55, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(32, ctx.currentTime + 0.16);
+    gain.gain.setValueAtTime(0.25, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.16);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.16);
+  } catch {
+    // AudioContext blocked or unsupported; silent fallback
+  }
+};
 
 interface DocumentEditorProps {
   document: DocumentItem | null;
@@ -53,16 +77,23 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
   const [isCopiedErp, setIsCopiedErp] = useState(false);
+  const [cadenceWarning, setCadenceWarning] = useState(false);
+  const [poMatchData, setPoMatchData] = useState<any | null>(null);
+  const [isLoadingPo, setIsLoadingPo] = useState(false);
+  const [isPoModalOpen, setIsPoModalOpen] = useState(false);
   const [suspiciousCount, setSuspiciousCount] = useState(0);
   const exportMenuRef = useRef<HTMLDivElement>(null);
   const jumpTimerRef = useRef<number | null>(null);
   const suspiciousTimerRef = useRef<number | null>(null);
+  const cadenceTimerRef = useRef<number | null>(null);
+  const cadenceWarningRef = useRef(false);
 
   // Clean up timers on unmount
   useEffect(() => {
     return () => {
       if (jumpTimerRef.current) clearTimeout(jumpTimerRef.current);
       if (suspiciousTimerRef.current) clearTimeout(suspiciousTimerRef.current);
+      if (cadenceTimerRef.current) clearTimeout(cadenceTimerRef.current);
     };
   }, []);
 
@@ -260,13 +291,6 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
     }
   };
 
-  const handleApproveAndNext = async () => {
-    await handleSaveChanges('onaylandi');
-    if (onSelectNextDoc) {
-      onSelectNextDoc();
-    }
-  };
-
   const totalCalculatedQty = (formData.kalemler || []).reduce(
     (sum, k) => {
       const v = Number(k?.miktar);
@@ -284,6 +308,44 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
 
   const isMathMatch = parsedDocTotalQty !== null && Math.abs(totalCalculatedQty - parsedDocTotalQty) < 0.05;
   const isMathDiscrepancy = parsedDocTotalQty !== null && !isMathMatch;
+
+  const handleApproveAndNext = async (force: boolean = false) => {
+    // Cadence Braking (Ritmik Frenleme):
+    // Matematiksel uyuşmazlık durumunda ilk onay denemesinde mikro-direnç göster
+    if (!force && isMathDiscrepancy && !cadenceWarningRef.current) {
+      playCadenceHaptic();
+      cadenceWarningRef.current = true;
+      setCadenceWarning(true);
+      if (cadenceTimerRef.current) clearTimeout(cadenceTimerRef.current);
+      cadenceTimerRef.current = window.setTimeout(() => {
+        cadenceWarningRef.current = false;
+        setCadenceWarning(false);
+      }, 3500);
+      return;
+    }
+
+    if (cadenceTimerRef.current) clearTimeout(cadenceTimerRef.current);
+    cadenceWarningRef.current = false;
+    setCadenceWarning(false);
+    await handleSaveChanges('onaylandi');
+    if (onSelectNextDoc) {
+      onSelectNextDoc();
+    }
+  };
+
+  const handleOpenPoReconcile = async () => {
+    if (!document) return;
+    setIsLoadingPo(true);
+    try {
+      const data = await documentApi.reconcilePo(document.id);
+      setPoMatchData(data);
+      setIsPoModalOpen(true);
+    } catch (err) {
+      console.error('3-Way PO Eşleşme hatası:', err);
+    } finally {
+      setIsLoadingPo(false);
+    }
+  };
 
   const handleCopyErpData = () => {
     if (!formData) return;
@@ -379,7 +441,7 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
           ) : (
             <button
               type="button"
-              onClick={handleApproveAndNext}
+              onClick={() => handleApproveAndNext(false)}
               disabled={isSaving}
               className="flex-1 flex items-center justify-center space-x-1.5 bg-emerald-600 hover:bg-emerald-500 text-white py-2 px-3 min-h-[38px] rounded-lg text-xs font-bold shadow-md shadow-emerald-600/20 truncate tactile-btn-emerald"
               title="Verileri onayla ve bir sonraki irsaliyeye geç (Ctrl+Enter)"
@@ -491,6 +553,44 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
             </button>
           )}
         </div>
+
+        {/* Cadence Braking (Ritmik Frenleme) Mikro-Direnç Uyarı Bandı */}
+        {cadenceWarning && (
+          <div className="p-2.5 rounded-lg bg-amber-500/15 border border-amber-500/40 cadence-shake flex flex-col gap-2 shadow-lg">
+            <div className="flex items-start space-x-2">
+              <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold text-amber-300">Ritmik Frenleme: Miktar Uyuşmazlığı!</h4>
+                  <span className="text-[10px] text-amber-300/80 font-mono">3sn içinde override</span>
+                </div>
+                <p className="text-[11px] text-amber-200/90 leading-tight mt-0.5">
+                  Kalemler toplamı ({totalCalculatedQty.toLocaleString('tr-TR')}) ile irsaliye dip toplamı ({parsedDocTotalQty?.toLocaleString('tr-TR')}) uyuşmuyor.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center justify-end space-x-2 pt-1 border-t border-amber-500/20">
+              <button
+                type="button"
+                onClick={() => {
+                  cadenceWarningRef.current = false;
+                  setCadenceWarning(false);
+                }}
+                className="px-2.5 py-1 text-[11px] rounded bg-theme-card hover:bg-theme-card-hover text-theme-secondary hover:text-theme-primary transition-all font-medium border border-theme-subtle"
+              >
+                Düzelt
+              </button>
+              <button
+                type="button"
+                onClick={() => handleApproveAndNext(true)}
+                className="px-3 py-1 text-[11px] rounded bg-amber-600 hover:bg-amber-500 text-white font-bold transition-all shadow-sm flex items-center space-x-1"
+              >
+                <span>Yine de Onayla</span>
+                <span className="text-[10px] opacity-80 font-mono">(Ctrl+↵)</span>
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* İrsaliye Dışı Belgede "Kusursuz Kararlılık" Uygunsuzluk & Ayıklama Paneli */}
@@ -541,8 +641,23 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
         </div>
       ) : (
         <>
-          {/* Matematiksel Mutabakat Rozeti (Canlı Kalem vs. Belge Dip Toplamı Kıyaslaması) */}
-          <div className="px-3 pt-3">
+          {/* Matematiksel Mutabakat Rozeti & 3-Way PO Eşleşmesi */}
+          <div className="px-3 pt-3 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold text-theme-muted uppercase tracking-wider">
+                Doğrulama & Mutabakat
+              </span>
+              <button
+                type="button"
+                onClick={handleOpenPoReconcile}
+                disabled={isLoadingPo}
+                className="flex items-center space-x-1.5 px-2 py-0.5 rounded bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-[10px] font-semibold transition-all tactile-btn"
+                title="ERP Satınalma Siparişi ile 3'lü Eşleştirme (3-Way PO Matching)"
+              >
+                <Building2 className={`w-3 h-3 text-indigo-400 ${isLoadingPo ? 'animate-spin' : ''}`} />
+                <span>{isLoadingPo ? 'Eşleştiriliyor...' : '3-Way ERP Eşleşmesi'}</span>
+              </button>
+            </div>
             {isMathMatch ? (
               <div className="flex items-center space-x-2 p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/25 text-emerald-300 text-xs">
                 <CheckCheck className="w-4 h-4 text-emerald-400 shrink-0" />
@@ -688,6 +803,131 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
             </div>
           </div>
         </>
+      )}
+
+      {/* 3-Way PO ERP Reconciliation Modal */}
+      {isPoModalOpen && poMatchData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs">
+          <div className="bg-theme-surface border border-theme-subtle rounded-xl max-w-lg w-full p-5 space-y-4 shadow-2xl relative animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between border-b border-theme-subtle pb-3">
+              <div className="flex items-center space-x-2.5">
+                <div className="w-8 h-8 rounded-lg bg-indigo-500/10 border border-indigo-500/25 flex items-center justify-center text-indigo-400">
+                  <Building2 className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-theme-primary">3-Way PO Eşleşme Raporu</h3>
+                  <p className="text-[10px] text-theme-muted font-mono">
+                    Sipariş: {poMatchData.po_no} • VKN: {poMatchData.vkn_checksum_valid ? '✓ Modulo-10 Doğrulandı' : '⚠ VKN Hatası'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsPoModalOpen(false)}
+                className="p-1 rounded-lg text-theme-muted hover:text-theme-primary hover:bg-theme-card transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Durum Rozeti */}
+            <div className={`p-3 rounded-lg border text-xs flex items-center justify-between ${
+              poMatchData.is_matched 
+                ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300' 
+                : 'bg-amber-500/10 border-amber-500/30 text-amber-300'
+            }`}>
+              <div className="flex items-center space-x-2">
+                {poMatchData.is_matched ? (
+                  <CheckCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+                ) : (
+                  <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+                )}
+                <span className="font-semibold">
+                  {poMatchData.is_matched 
+                    ? 'Tüm Kalemler PO ile Birebir Uyuşuyor' 
+                    : `%${poMatchData.match_percentage} Kısmi Eşleşme - Sapma Tespit Edildi`}
+                </span>
+              </div>
+              <span className="font-mono font-bold tabular-nums">
+                {poMatchData.total_invoice_qty} / {poMatchData.total_po_qty} Adet
+              </span>
+            </div>
+
+            {/* Kalem Kıyaslama Tablosu */}
+            <div className="max-h-56 overflow-y-auto border border-theme-subtle rounded-lg">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="bg-theme-card border-b border-theme-subtle text-[10px] text-theme-muted uppercase font-mono">
+                    <th className="p-2">Mal / Hizmet</th>
+                    <th className="p-2 text-right">İrsaliye</th>
+                    <th className="p-2 text-right">PO (Sipariş)</th>
+                    <th className="p-2 text-center">Durum</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-theme-subtle">
+                  {(poMatchData.reconciled_items || []).map((item: any, idx: number) => (
+                    <tr key={idx} className="hover:bg-theme-card/50">
+                      <td className="p-2 font-medium text-theme-primary truncate max-w-[160px]">{item.product || item.mal_hizmet || 'Belirtilmemiş'}</td>
+                      <td className="p-2 text-right font-mono tabular-nums text-theme-secondary">{item.invoice_qty} {item.unit}</td>
+                      <td className="p-2 text-right font-mono tabular-nums text-theme-secondary">{item.po_qty} {item.unit}</td>
+                      <td className="p-2 text-center">
+                        <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                          item.status === 'TAM_UYUMLU'
+                            ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                            : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                        }`}>
+                          {item.status === 'TAM_UYUMLU' ? 'TAM UYUMLU' : 'SAPMA'}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* ERP Entegrasyon Hazırlık Durumu */}
+            <div className="p-2.5 rounded-lg bg-theme-card border border-theme-subtle space-y-1.5">
+              <span className="text-[10px] font-bold text-theme-muted uppercase tracking-wider block">
+                ERP Entegrasyon Uygunluğu (Bridge Readiness)
+              </span>
+              <div className="grid grid-cols-3 gap-2 text-[11px] font-medium text-center">
+                <div className="p-1.5 rounded bg-theme-surface border border-theme-subtle flex items-center justify-center space-x-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                  <span className="text-theme-secondary">SAP MIGO 101</span>
+                </div>
+                <div className="p-1.5 rounded bg-theme-surface border border-theme-subtle flex items-center justify-center space-x-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                  <span className="text-theme-secondary">Logo STFICHE 01</span>
+                </div>
+                <div className="p-1.5 rounded bg-theme-surface border border-theme-subtle flex items-center justify-center space-x-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                  <span className="text-theme-secondary">Mikro Ambar</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Aksiyon */}
+            <div className="flex items-center justify-end space-x-2 pt-1 border-t border-theme-subtle">
+              <button
+                type="button"
+                onClick={() => setIsPoModalOpen(false)}
+                className="px-4 py-2 rounded-lg bg-theme-card hover:bg-theme-card-hover text-theme-secondary hover:text-theme-primary text-xs font-semibold border border-theme-subtle transition-all"
+              >
+                Kapat
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  handleCopyErpData();
+                  setIsPoModalOpen(false);
+                }}
+                className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-all shadow-md shadow-indigo-600/20"
+              >
+                ERP Verisini Kopyala & Kapat
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </aside>
   );

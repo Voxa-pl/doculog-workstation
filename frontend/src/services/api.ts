@@ -86,6 +86,11 @@ export const documentApi = {
     await api.delete('/documents');
   },
 
+  reconcilePo: async (docId: string): Promise<any> => {
+    const res = await api.get(`/documents/${docId}/reconcile-po`);
+    return res.data;
+  },
+
   getSingleExcelUrl: (id: string) => `/api/documents/${id}/export-excel`,
   getSingleLogoXmlUrl: (id: string) => `/api/documents/${id}/export-logo-xml`,
   getSingleJsonUrl: (id: string) => `/api/documents/${id}/export-json`,
