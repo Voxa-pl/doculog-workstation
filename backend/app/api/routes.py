@@ -42,6 +42,7 @@ from ..services.erp_exporter import erp_exporter
 from ..services.validation import validate_vkn, validate_tckn, reconcile_purchase_order_3way
 from ..services.qr_scanner import decode_qr_from_image, cross_verify_gib_qr
 from ..services.uetds import generate_uetds_payload, generate_uetds_xml
+from ..services.queue_manager import queue_manager, GLOBAL_AI_SEMAPHORE
 
 router = APIRouter()
 
@@ -358,6 +359,8 @@ def _run_ai_extraction(doc_id: str):
     except Exception as ws_err:
         print(f"[WebSocket HATA] process_completed bildirimi gönderilemedi: {ws_err}")
 
+GLOBAL_PROCESSING_SEMAPHORE = GLOBAL_AI_SEMAPHORE
+
 @router.post("/documents/{doc_id}/process", response_model=DocumentItem)
 async def process_document(doc_id: str):
     doc = doc_repo.get_by_id(doc_id)
@@ -373,20 +376,35 @@ async def process_document(doc_id: str):
         "durum": ProcessingStatus.ISLENIYOR.value
     })
 
-    loop = asyncio.get_event_loop()
-    await loop.run_in_executor(None, _run_ai_extraction, doc_id)
-
+    await queue_manager.process_document_safe(doc_id, _run_ai_extraction)
     return doc_repo.get_by_id(doc_id)
-
-BATCH_SEMAPHORE = asyncio.Semaphore(2)
 
 async def _run_batch_worker(doc_ids: List[str]):
     """Toplu evrak işlemede API kota patlamasını (503/504) önleyen sıralı worker."""
-    loop = asyncio.get_event_loop()
     for doc_id in doc_ids:
-        async with BATCH_SEMAPHORE:
-            await loop.run_in_executor(None, _run_ai_extraction, doc_id)
-            await asyncio.sleep(1.2)  # Kota nefes alma payı
+        await queue_manager.process_document_safe(doc_id, _run_ai_extraction)
+        await asyncio.sleep(0.8)  # Kota nefes alma payı
+
+@router.get("/system/queue-status")
+async def get_queue_status():
+    docs = doc_repo.get_all()
+    processing = [d for d in docs if d.durum == ProcessingStatus.ISLENIYOR]
+    queued = [d for d in docs if d.durum == ProcessingStatus.KUYRUKTA]
+    completed = [d for d in docs if d.durum == ProcessingStatus.TAMAMLANDI]
+    error = [d for d in docs if d.durum == ProcessingStatus.HATA]
+    q_status = queue_manager.get_status()
+    return {
+        "isleniyor_adet": len(processing),
+        "kuyrukta_adet": len(queued),
+        "tamamlandi_adet": len(completed),
+        "hata_adet": len(error),
+        "concurrency_limit": queue_manager.max_concurrent,
+        "active_workers": q_status["active_workers"],
+        "queued_tasks": q_status["queued_tasks"],
+        "total_completed": q_status["total_completed"],
+        "total_failed": q_status["total_failed"],
+        "total_retried": q_status["total_retried"]
+    }
 
 @router.post("/batch/process-all")
 async def process_all_documents(background_tasks: BackgroundTasks):

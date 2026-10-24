@@ -16,6 +16,7 @@ class IrsaliyeHeader(BaseModel):
     """Sevk irsaliyesi başlık, cari ve lojistik sevkiyat bilgileri"""
     irsaliye_no: Optional[str] = Field(default=None, description="İrsaliye seri-sıra no veya e-İrsaliye no (Örn: GIB2024000004521, A-149201)")
     irsaliye_tipi: Optional[str] = Field(default="Sevk İrsaliyesi", description="Belge türü (Sevk İrsaliyesi, e-İrsaliye, Ambar Teslim Fişi)")
+    ettn: Optional[str] = Field(default=None, description="Evrensel Tekil Tanımlama Numarası (UUID formatında ETTN)")
     duzenleme_tarihi: Optional[str] = Field(default=None, description="Belge düzenleme tarihi (GG.AA.YYYY formatında, örn: 14.10.2024)")
     sevk_tarihi: Optional[str] = Field(default=None, description="Fiili sevk/yola çıkış tarihi (GG.AA.YYYY)")
     sevk_saati: Optional[str] = Field(default=None, description="Fiili sevk saati (SS:DD formatında)")

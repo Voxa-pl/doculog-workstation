@@ -2,6 +2,7 @@ import os
 import json
 import base64
 import socket
+import time
 import logging
 from pathlib import Path
 from typing import Optional, Dict, Any, List
@@ -84,16 +85,67 @@ class GeminiExtractor:
         self,
         image_path: Path,
         mime_type: str = "image/jpeg",
-        additional_pages: Optional[List[Path]] = None
+        additional_pages: Optional[List[Path]] = None,
+        qr_anchor: Optional[Any] = None
     ) -> IrsaliyeData:
         client = self.get_client()
 
-        if client is None:
-            logger.info("Gemini API anahtarı tanımlı değil, gerçekçi simülasyon verisi üretiliyor.")
-            return self._generate_realistic_fallback_data(image_path.name)
-
         if not image_path.exists():
             raise FileNotFoundError(f"İşlenecek görsel dosyası bulunamadı: {image_path}")
+
+        # QR-First Ön Tarama: Görsel üzerindeki karekodu yapay zekadan önce tara
+        qr_anchor_text = ""
+        qr_data_obj = qr_anchor
+        if qr_data_obj is None:
+            try:
+                from .qr_scanner import gib_qr_scanner
+                qr_list = gib_qr_scanner.scan_image(image_path)
+                if qr_list:
+                    qr_data_obj = qr_list[0]
+            except Exception as qr_err:
+                logger.debug(f"Karekod ön tarama istisnası (göz ardı edildi): {qr_err}")
+
+        if qr_data_obj:
+            anchors = []
+            if qr_data_obj.irsaliye_no:
+                anchors.append(f"Resmi İrsaliye Numarası: {qr_data_obj.irsaliye_no}")
+            if qr_data_obj.gonderici_vkn_tckn:
+                anchors.append(f"Gönderici VKN/TCKN: {qr_data_obj.gonderici_vkn_tckn}")
+            if qr_data_obj.alici_vkn_tckn:
+                anchors.append(f"Alıcı VKN/TCKN: {qr_data_obj.alici_vkn_tckn}")
+            if qr_data_obj.ettn:
+                anchors.append(f"ETTN (Evrensel UUID): {qr_data_obj.ettn}")
+            if qr_data_obj.belge_tarihi:
+                anchors.append(f"Belge Tarihi: {qr_data_obj.belge_tarihi}")
+            if anchors:
+                qr_anchor_text = (
+                    "\n\nÖN DOĞRULANMIŞ GİB KAREKOD KANCASI (GROUND TRUTH ANCHOR):\n"
+                    "Evrak üzerindeki kriptografik GİB karekodundan şu resmi alanlar %100 hassasiyetle okunmuştur:\n"
+                    + "\n".join(f"- {a}" for a in anchors)
+                    + "\nLütfen JSON çıktında bu değerleri temel al, uyuşmayan alanları karekod verisiyle düzelt ve görseldeki diğer kalem/adres bilgilerini tamamla.\n\n"
+                )
+
+        if client is None:
+            logger.info("Gemini API anahtarı tanımlı değil, gerçekçi simülasyon verisi üretiliyor.")
+            fallback = self._generate_realistic_fallback_data(image_path.name)
+            if qr_data_obj and fallback.header:
+                if qr_data_obj.ettn:
+                    fallback.header.ettn = qr_data_obj.ettn
+                if qr_data_obj.irsaliye_no:
+                    fallback.header.irsaliye_no = qr_data_obj.irsaliye_no
+                if qr_data_obj.gonderici_vkn_tckn:
+                    fallback.header.gonderici_vkn = qr_data_obj.gonderici_vkn_tckn
+                if qr_data_obj.alici_vkn_tckn:
+                    fallback.header.alici_vkn = qr_data_obj.alici_vkn_tckn
+                if qr_data_obj.belge_tarihi:
+                    fallback.header.duzenleme_tarihi = qr_data_obj.belge_tarihi
+                if qr_data_obj.ettn:
+                    ettn_str = f"ETTN: {qr_data_obj.ettn}"
+                    if not fallback.genel_notlar:
+                        fallback.genel_notlar = ettn_str
+                    elif qr_data_obj.ettn not in fallback.genel_notlar:
+                        fallback.genel_notlar = f"{fallback.genel_notlar} | {ettn_str}"
+            return fallback
 
         try:
             parts = []
@@ -110,6 +162,7 @@ class GeminiExtractor:
             schema = IrsaliyeData.model_json_schema()
             prompt_text = (
                 f"{SYSTEM_PROMPT}\n\n"
+                f"{qr_anchor_text}"
                 "Lütfen bu sevk irsaliyesi görsel(ler)indeki tüm başlık, cari, taşıma ve ürün kalemleri verilerini "
                 "yapılandırılmış JSON olarak çıkart. Eğer birden fazla sayfa varsa tüm sayfalardaki kalemleri tek listede birleştir."
             )
@@ -133,39 +186,45 @@ class GeminiExtractor:
             output_text: Optional[str] = None
 
             for model_name in models_to_try:
-                try:
-                    response = client.models.generate_content(
-                        model=model_name,
-                        contents=parts,
-                        config=types.GenerateContentConfig(
-                            response_mime_type="application/json",
-                            response_json_schema=schema,
-                        ),
-                    )
-                    if response and response.text:
-                        output_text = response.text
+                for attempt in range(2):  # 429 için 2 deneme
+                    try:
+                        response = client.models.generate_content(
+                            model=model_name,
+                            contents=parts,
+                            config=types.GenerateContentConfig(
+                                response_mime_type="application/json",
+                                response_json_schema=schema,
+                            ),
+                        )
+                        if response and response.text:
+                            output_text = response.text
+                            break
+                    except errors.APIError as api_err:
+                        last_error = api_err
+                        code = getattr(api_err, "code", None)
+                        err_msg = str(api_err).lower()
+                        if code == 429 or "429" in err_msg or "resource_exhausted" in err_msg or "quota" in err_msg:
+                            logger.warning(f"[{model_name}] Gemini API kota sınırı (429), {1.2 * (attempt + 1)}s bekleniyor...")
+                            time.sleep(1.2 * (attempt + 1))
+                            continue
+                        else:
+                            logger.warning(f"[{model_name}] Gemini APIError ({code}): {api_err}")
+                            break
+                    except (httpx.TimeoutException, TimeoutError, socket.timeout) as timeout_err:
+                        last_error = timeout_err
+                        logger.warning(f"[{model_name}] Gemini API zaman aşımı (Timeout): {timeout_err}")
                         break
-                except errors.APIError as api_err:
-                    last_error = api_err
-                    code = getattr(api_err, "code", None)
-                    err_msg = str(api_err).lower()
-                    if code == 429 or "429" in err_msg or "resource_exhausted" in err_msg or "quota" in err_msg:
-                        logger.warning(f"[{model_name}] Gemini API kota sınırı aşıldı (429 Rate Limit): {api_err}")
-                    else:
-                        logger.warning(f"[{model_name}] Gemini APIError ({code}): {api_err}")
-                    continue
-                except (httpx.TimeoutException, TimeoutError, socket.timeout) as timeout_err:
-                    last_error = timeout_err
-                    logger.warning(f"[{model_name}] Gemini API zaman aşımı (Timeout): {timeout_err}")
-                    continue
-                except (httpx.NetworkError, ConnectionError, OSError) as net_err:
-                    last_error = net_err
-                    logger.warning(f"[{model_name}] Gemini API ağ kopması / bağlantı hatası: {net_err}")
-                    continue
-                except Exception as ex:
-                    last_error = ex
-                    logger.warning(f"[{model_name}] Beklenmeyen model hatası: {ex}")
-                    continue
+                    except (httpx.NetworkError, ConnectionError, OSError) as net_err:
+                        last_error = net_err
+                        logger.warning(f"[{model_name}] Gemini API ağ kopması / bağlantı hatası: {net_err}")
+                        break
+                    except Exception as ex:
+                        last_error = ex
+                        logger.warning(f"[{model_name}] Beklenmeyen model hatası: {ex}")
+                        break
+
+                if output_text:
+                    break
 
             if not output_text:
                 if last_error:
@@ -204,7 +263,27 @@ class GeminiExtractor:
                 raise GeminiExtractionError(f"Model geçerli bir JSON çıktısı üretemedi: {jde}")
 
             try:
-                return IrsaliyeData.model_validate(data_dict)
+                validated_data = IrsaliyeData.model_validate(data_dict)
+                # QR Zenginleştirmesi (Data Enrichment)
+                if qr_data_obj and validated_data.header:
+                    if qr_data_obj.ettn:
+                        validated_data.header.ettn = qr_data_obj.ettn
+                        ettn_str = f"ETTN: {qr_data_obj.ettn}"
+                        if not validated_data.genel_notlar:
+                            validated_data.genel_notlar = ettn_str
+                        elif qr_data_obj.ettn not in validated_data.genel_notlar:
+                            validated_data.genel_notlar = f"{validated_data.genel_notlar} | {ettn_str}"
+                    if qr_data_obj.irsaliye_no and (not validated_data.header.irsaliye_no or len(validated_data.header.irsaliye_no) < 6):
+                        validated_data.header.irsaliye_no = qr_data_obj.irsaliye_no
+                    if qr_data_obj.gonderici_vkn_tckn and not validated_data.header.gonderici_vkn:
+                        validated_data.header.gonderici_vkn = qr_data_obj.gonderici_vkn_tckn
+                    if qr_data_obj.alici_vkn_tckn and not validated_data.header.alici_vkn:
+                        validated_data.header.alici_vkn = qr_data_obj.alici_vkn_tckn
+                    if qr_data_obj.belge_tarihi and not validated_data.header.duzenleme_tarihi:
+                        validated_data.header.duzenleme_tarihi = qr_data_obj.belge_tarihi
+                    if qr_data_obj.belge_tarihi and not validated_data.header.sevk_tarihi:
+                        validated_data.header.sevk_tarihi = qr_data_obj.belge_tarihi
+                return validated_data
             except Exception as val_err:
                 logger.error(f"Ayrıştırılan JSON şemaya uymadı: {val_err}")
                 raise GeminiExtractionError(f"Ayrıştırılan veri irsaliye şemasına uymuyor: {val_err}")
