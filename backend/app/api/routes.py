@@ -40,6 +40,8 @@ from ..services.image_processor import image_processor
 from ..services.excel_exporter import excel_exporter
 from ..services.erp_exporter import erp_exporter
 from ..services.validation import validate_vkn, validate_tckn, reconcile_purchase_order_3way
+from ..services.qr_scanner import decode_qr_from_image, cross_verify_gib_qr
+from ..services.uetds import generate_uetds_payload, generate_uetds_xml
 
 router = APIRouter()
 
@@ -862,4 +864,35 @@ async def check_vkn(vkn: str):
         "is_valid_vkn": validate_vkn(vkn),
         "is_valid_tckn": validate_tckn(vkn)
     }
+
+@router.get("/documents/{doc_id}/gib-qr")
+async def get_document_gib_qr(doc_id: str):
+    doc = doc_repo.get_by_id(doc_id)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Belge bulunamadı.")
+    
+    header = doc.veri.header.model_dump() if doc.veri and doc.veri.header else {}
+    file_path = doc.dosya_yolu
+
+    # PDF ise ilk sayfa görseli üzerinde tara
+    if file_path.lower().endswith('.pdf') and doc.sayfalar and len(doc.sayfalar) > 0:
+        file_path = doc.sayfalar[0]
+
+    qr_res = decode_qr_from_image(file_path)
+    verification = cross_verify_gib_qr(qr_res, header)
+    return verification
+
+@router.get("/documents/{doc_id}/uetds-payload")
+async def get_document_uetds_payload(doc_id: str):
+    doc = doc_repo.get_by_id(doc_id)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Belge bulunamadı.")
+    
+    header = doc.veri.header.model_dump() if doc.veri and doc.veri.header else {}
+    kalemler = [k.model_dump() for k in doc.veri.kalemler] if doc.veri and doc.veri.kalemler else []
+    
+    payload = generate_uetds_payload(header, kalemler)
+    xml_str = generate_uetds_xml(header, kalemler)
+    payload["xml_preview"] = xml_str
+    return payload
 

@@ -28,6 +28,8 @@ import {
   Check,
   Zap,
   Building2,
+  Truck,
+  QrCode,
   X
 } from 'lucide-react';
 import { documentApi } from '../../services/api';
@@ -81,6 +83,13 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
   const [poMatchData, setPoMatchData] = useState<any | null>(null);
   const [isLoadingPo, setIsLoadingPo] = useState(false);
   const [isPoModalOpen, setIsPoModalOpen] = useState(false);
+  const [gibQrData, setGibQrData] = useState<any | null>(null);
+  const [isLoadingQr, setIsLoadingQr] = useState(false);
+  const [uetdsData, setUetdsData] = useState<any | null>(null);
+  const [isLoadingUetds, setIsLoadingUetds] = useState(false);
+  const [isUetdsModalOpen, setIsUetdsModalOpen] = useState(false);
+  const [uetdsViewFormat, setUetdsViewFormat] = useState<'summary' | 'json' | 'xml'>('summary');
+  const [isCopiedUetds, setIsCopiedUetds] = useState(false);
   const [suspiciousCount, setSuspiciousCount] = useState(0);
   const exportMenuRef = useRef<HTMLDivElement>(null);
   const jumpTimerRef = useRef<number | null>(null);
@@ -106,6 +115,19 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
       setHasUnsavedChanges(false);
     }
   }, [document?.id, document?.veri]);
+
+  // GİB e-İrsaliye Karekod Doğrulaması
+  useEffect(() => {
+    if (document?.id && document.durum !== 'kuyrukta') {
+      setIsLoadingQr(true);
+      documentApi.getGibQrVerification(document.id)
+        .then(res => setGibQrData(res))
+        .catch(() => setGibQrData(null))
+        .finally(() => setIsLoadingQr(false));
+    } else {
+      setGibQrData(null);
+    }
+  }, [document?.id, document?.durum]);
 
   // Şüpheli alan sayısını güncelle
   useEffect(() => {
@@ -347,6 +369,28 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
     }
   };
 
+  const handleOpenUetdsModal = async () => {
+    if (!document) return;
+    setIsLoadingUetds(true);
+    try {
+      const data = await documentApi.getUetdsPayload(document.id);
+      setUetdsData(data);
+      setIsUetdsModalOpen(true);
+    } catch (err) {
+      console.error('U-ETDS yükleme hatası:', err);
+    } finally {
+      setIsLoadingUetds(false);
+    }
+  };
+
+  const handleCopyUetdsContent = () => {
+    if (!uetdsData) return;
+    const content = uetdsViewFormat === 'xml' ? (uetdsData.xml_preview || '') : JSON.stringify(uetdsData, null, 2);
+    navigator.clipboard.writeText(content);
+    setIsCopiedUetds(true);
+    setTimeout(() => setIsCopiedUetds(false), 2200);
+  };
+
   const handleCopyErpData = () => {
     if (!formData) return;
     const erpPayload = {
@@ -379,6 +423,25 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
             <span className="text-xs font-bold text-theme-primary uppercase tracking-wider flex items-center gap-1.5">
               <span>Doğrulama İstasyonu</span>
             </span>
+            {gibQrData?.is_gib_verified && (
+              <div 
+                className="inline-flex items-center h-5 bg-emerald-950/40 border border-emerald-500/25 rounded px-1.5 gap-1 shadow-[inset_0_1px_0_0_rgba(52,211,153,0.15)] select-none"
+                title={gibQrData.message}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)]" />
+                <span className="text-[9px] font-bold text-emerald-300 uppercase tracking-wider">
+                  GİB Mühürlü
+                </span>
+                {gibQrData.ettn && (
+                  <>
+                    <span className="w-px h-2.5 bg-emerald-500/30" />
+                    <span className="font-mono text-[9px] text-emerald-400/90 font-medium">
+                      {gibQrData.ettn.substring(0, 8)}...
+                    </span>
+                  </>
+                )}
+              </div>
+            )}
             {hasUnsavedChanges && (
               <span className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] bg-amber-500/10 text-amber-400 border border-amber-500/20 font-medium">
                 <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
@@ -641,22 +704,34 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
         </div>
       ) : (
         <>
-          {/* Matematiksel Mutabakat Rozeti & 3-Way PO Eşleşmesi */}
+          {/* Matematiksel Mutabakat Rozeti, 3-Way PO & U-ETDS Bakanlık Butonları */}
           <div className="px-3 pt-3 space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-[10px] font-bold text-theme-muted uppercase tracking-wider">
                 Doğrulama & Mutabakat
               </span>
-              <button
-                type="button"
-                onClick={handleOpenPoReconcile}
-                disabled={isLoadingPo}
-                className="flex items-center space-x-1.5 px-2 py-0.5 rounded bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-[10px] font-semibold transition-all tactile-btn"
-                title="ERP Satınalma Siparişi ile 3'lü Eşleştirme (3-Way PO Matching)"
-              >
-                <Building2 className={`w-3 h-3 text-indigo-400 ${isLoadingPo ? 'animate-spin' : ''}`} />
-                <span>{isLoadingPo ? 'Eşleştiriliyor...' : '3-Way ERP Eşleşmesi'}</span>
-              </button>
+              <div className="flex items-center space-x-1.5">
+                <button
+                  type="button"
+                  onClick={handleOpenUetdsModal}
+                  disabled={isLoadingUetds}
+                  className="flex items-center space-x-1 px-2 py-0.5 rounded bg-blue-500/10 hover:bg-blue-500/20 text-blue-300 border border-blue-500/30 text-[10px] font-semibold transition-all tactile-btn"
+                  title="Ulaştırma Bakanlığı 4925 Karayolu Taşıma Kanunu U-ETDS Sefer Bildirimi"
+                >
+                  <Truck className={`w-3 h-3 text-blue-400 ${isLoadingUetds ? 'animate-spin' : ''}`} />
+                  <span>{isLoadingUetds ? 'Hazırlanıyor...' : 'U-ETDS'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleOpenPoReconcile}
+                  disabled={isLoadingPo}
+                  className="flex items-center space-x-1 px-2 py-0.5 rounded bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-[10px] font-semibold transition-all tactile-btn"
+                  title="ERP Satınalma Siparişi ile 3'lü Eşleştirme (3-Way PO Matching)"
+                >
+                  <Building2 className={`w-3 h-3 text-indigo-400 ${isLoadingPo ? 'animate-spin' : ''}`} />
+                  <span>{isLoadingPo ? 'Eşleştiriliyor...' : '3-Way ERP'}</span>
+                </button>
+              </div>
             </div>
             {isMathMatch ? (
               <div className="flex items-center space-x-2 p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/25 text-emerald-300 text-xs">
@@ -925,6 +1000,165 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
               >
                 ERP Verisini Kopyala & Kapat
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* U-ETDS Bakanlık Sefer Manifestosu Modalı */}
+      {isUetdsModalOpen && uetdsData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs">
+          <div className="bg-theme-surface border border-theme-subtle rounded-xl max-w-xl w-full p-5 space-y-4 shadow-2xl relative animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between border-b border-theme-subtle pb-3">
+              <div className="flex items-center space-x-2.5">
+                <div className="w-8 h-8 rounded-lg bg-blue-500/10 border border-blue-500/25 flex items-center justify-center text-blue-400">
+                  <Truck className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-theme-primary">U-ETDS Eşya Sefer Manifestosu</h3>
+                  <p className="text-[10px] text-theme-muted font-mono">
+                    4925 Sayılı Karayolu Taşıma Kanunu Madde 35/C • Bildirim Şeması V2.1
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsUetdsModalOpen(false)}
+                className="p-1 rounded-lg text-theme-muted hover:text-theme-primary hover:bg-theme-card transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Durum & Mevzuat Rozeti */}
+            <div className={`p-3 rounded-lg border text-xs flex items-center justify-between ${
+              uetdsData.ozet?.mevzuatUyumluluk
+                ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
+                : 'bg-amber-500/10 border-amber-500/30 text-amber-300'
+            }`}>
+              <div className="flex items-center space-x-2">
+                {uetdsData.ozet?.mevzuatUyumluluk ? (
+                  <CheckCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+                ) : (
+                  <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+                )}
+                <div>
+                  <span className="font-semibold block">
+                    {uetdsData.ozet?.mevzuatUyumluluk
+                      ? 'Ulaştırma Bakanlığı Sefer Bildirimine Tam Uyumlu'
+                      : 'Eksik Alanlar Mevcut (Bildirim Öncesi Tamamlayın)'}
+                  </span>
+                  <span className="text-[10px] opacity-80 font-mono">
+                    Plaka: {uetdsData.seferBilgisi?.plaka} • Sürücü: {uetdsData.seferBilgisi?.soforKimlikNo} ({uetdsData.seferBilgisi?.soforTcDogrulandi ? '✓ TCKN Geçerli' : '⚠ Sağlama Hatası'})
+                  </span>
+                </div>
+              </div>
+              <span className="font-mono font-bold tabular-nums shrink-0">
+                {uetdsData.ozet?.toplamKalem} Kalem / {uetdsData.ozet?.toplamMiktar} Birim
+              </span>
+            </div>
+
+            {/* Sekme Seçici: Özet vs JSON vs SOAP XML */}
+            <div className="flex space-x-1 border-b border-theme-subtle pb-1">
+              <button
+                type="button"
+                onClick={() => setUetdsViewFormat('summary')}
+                className={`px-3 py-1 rounded text-xs font-semibold transition-all ${
+                  uetdsViewFormat === 'summary' ? 'bg-theme-card text-blue-400 border border-theme-subtle' : 'text-theme-muted hover:text-theme-primary'
+                }`}
+              >
+                Sefer Özeti
+              </button>
+              <button
+                type="button"
+                onClick={() => setUetdsViewFormat('json')}
+                className={`px-3 py-1 rounded text-xs font-semibold transition-all ${
+                  uetdsViewFormat === 'json' ? 'bg-theme-card text-blue-400 border border-theme-subtle' : 'text-theme-muted hover:text-theme-primary'
+                }`}
+              >
+                Bakanlık JSON
+              </button>
+              <button
+                type="button"
+                onClick={() => setUetdsViewFormat('xml')}
+                className={`px-3 py-1 rounded text-xs font-semibold transition-all ${
+                  uetdsViewFormat === 'xml' ? 'bg-theme-card text-blue-400 border border-theme-subtle' : 'text-theme-muted hover:text-theme-primary'
+                }`}
+              >
+                SOAP XML
+              </button>
+            </div>
+
+            {/* İçerik Görünümü */}
+            {uetdsViewFormat === 'summary' ? (
+              <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="p-2.5 rounded-lg bg-theme-card border border-theme-subtle space-y-1">
+                    <span className="text-[10px] font-bold text-theme-muted uppercase block">Çıkış Noktası</span>
+                    <p className="font-medium text-theme-primary truncate">{uetdsData.seferBilgisi?.cikisYeri?.unvan}</p>
+                    <p className="text-[11px] text-theme-muted truncate">{uetdsData.seferBilgisi?.cikisYeri?.adres}</p>
+                    <span className="text-[10px] font-mono text-emerald-400/90">VKN: {uetdsData.seferBilgisi?.cikisYeri?.vkn || 'Belirtilmedi'}</span>
+                  </div>
+                  <div className="p-2.5 rounded-lg bg-theme-card border border-theme-subtle space-y-1">
+                    <span className="text-[10px] font-bold text-theme-muted uppercase block">Varış Noktası</span>
+                    <p className="font-medium text-theme-primary truncate">{uetdsData.seferBilgisi?.varisYeri?.unvan}</p>
+                    <p className="text-[11px] text-theme-muted truncate">{uetdsData.seferBilgisi?.varisYeri?.adres}</p>
+                    <span className="text-[10px] font-mono text-emerald-400/90">VKN: {uetdsData.seferBilgisi?.varisYeri?.vkn || 'Belirtilmedi'}</span>
+                  </div>
+                </div>
+
+                <div className="p-2.5 rounded-lg bg-theme-card border border-theme-subtle space-y-1">
+                  <span className="text-[10px] font-bold text-theme-muted uppercase block">Taşınan Emtia Kalemleri</span>
+                  <div className="space-y-1 max-h-24 overflow-y-auto">
+                    {(uetdsData.yukBilgileri || []).map((y: any, idx: number) => (
+                      <div key={idx} className="flex items-center justify-between text-xs py-0.5 border-b border-theme-subtle/50 last:border-none">
+                        <span className="text-theme-secondary truncate max-w-[240px]">{y.siraNo}. {y.yukAdi}</span>
+                        <span className="font-mono font-medium text-theme-primary">{y.miktar} {y.birimKodu}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="bg-black/60 border border-theme-subtle rounded-lg p-3 font-mono text-[11px] text-emerald-400/90 max-h-56 overflow-y-auto">
+                <pre className="whitespace-pre-wrap break-all">
+                  {uetdsViewFormat === 'xml' ? uetdsData.xml_preview : JSON.stringify(uetdsData, null, 2)}
+                </pre>
+              </div>
+            )}
+
+            {/* Aksiyon */}
+            <div className="flex items-center justify-between pt-1 border-t border-theme-subtle">
+              <span className="text-[10px] text-theme-muted font-mono flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                <span>Bakanlık Gateway Hazır</span>
+              </span>
+              <div className="flex items-center space-x-2">
+                <button
+                  type="button"
+                  onClick={() => setIsUetdsModalOpen(false)}
+                  className="px-3 py-1.5 rounded-lg bg-theme-card hover:bg-theme-card-hover text-theme-secondary hover:text-theme-primary text-xs font-semibold border border-theme-subtle transition-all"
+                >
+                  Kapat
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCopyUetdsContent}
+                  className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-all shadow-md shadow-blue-600/20 flex items-center space-x-1"
+                >
+                  {isCopiedUetds ? (
+                    <>
+                      <Check className="w-3.5 h-3.5" />
+                      <span>Kopyalandı!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5" />
+                      <span>{uetdsViewFormat === 'xml' ? 'XML Kopyala' : 'JSON Kopyala'}</span>
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>

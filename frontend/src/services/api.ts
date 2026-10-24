@@ -91,6 +91,16 @@ export const documentApi = {
     return res.data;
   },
 
+  getGibQrVerification: async (docId: string): Promise<any> => {
+    const res = await api.get(`/documents/${docId}/gib-qr`);
+    return res.data;
+  },
+
+  getUetdsPayload: async (docId: string): Promise<any> => {
+    const res = await api.get(`/documents/${docId}/uetds-payload`);
+    return res.data;
+  },
+
   getSingleExcelUrl: (id: string) => `/api/documents/${id}/export-excel`,
   getSingleLogoXmlUrl: (id: string) => `/api/documents/${id}/export-logo-xml`,
   getSingleJsonUrl: (id: string) => `/api/documents/${id}/export-json`,

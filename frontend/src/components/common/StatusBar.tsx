@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { DocumentItem } from '../../types/irsaliye';
-import { Keyboard, Activity, HardDrive } from 'lucide-react';
+import { Keyboard, Activity, HardDrive, RefreshCw } from 'lucide-react';
+import { offlineBuffer } from '../../utils/offlineBuffer';
 
 interface StatusBarProps {
   selectedDoc: DocumentItem | null;
@@ -9,6 +10,35 @@ interface StatusBarProps {
 }
 
 export const StatusBar: React.FC<StatusBarProps> = ({ selectedDoc, zoom, isWsConnected = true }) => {
+  const [isOnline, setIsOnline] = useState<boolean>(true);
+  const [offlineCount, setOfflineCount] = useState<number>(0);
+  const [isFlushing, setIsFlushing] = useState<boolean>(false);
+
+  useEffect(() => {
+    setIsOnline(navigator.onLine);
+    setOfflineCount(offlineBuffer.getCount());
+
+    const handleOnline = () => {
+      setIsOnline(true);
+      if (offlineBuffer.getCount() > 0) {
+        setIsFlushing(true);
+        setTimeout(() => setIsFlushing(false), 2000);
+      }
+    };
+    const handleOffline = () => setIsOnline(false);
+    const handleCountChange = (e: any) => setOfflineCount(e.detail || 0);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    window.addEventListener('doculog-offline-count-changed', handleCountChange);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+      window.removeEventListener('doculog-offline-count-changed', handleCountChange);
+    };
+  }, []);
+
   const isProcessing = selectedDoc?.durum === 'isleniyor';
   const rawBytes = Number(selectedDoc?.boyut_bytes);
   const safeBytes = Number.isFinite(rawBytes) ? rawBytes : 0;
@@ -22,10 +52,30 @@ export const StatusBar: React.FC<StatusBarProps> = ({ selectedDoc, zoom, isWsCon
           <span>{isProcessing ? 'İşleniyor...' : 'Sistem Hazır'}</span>
         </div>
         <span className="text-slate-600 shrink-0">|</span>
-        <div className="flex items-center space-x-1.5 text-slate-400 shrink-0">
-          <span className={`w-2 h-2 rounded-full ${isWsConnected ? 'bg-emerald-400 shadow-sm shadow-emerald-400/50 animate-pulse' : 'bg-amber-400'}`} />
-          <span className="text-[10px] hidden xs:inline">{isWsConnected ? 'Canlı Senkron (PC/Mobil)' : 'Senkron Bekliyor'}</span>
-        </div>
+
+        {/* Canlı / Çevrimdışı Durum Göstergesi (Zero-Panic Ambar Tamponu) */}
+        {!isOnline ? (
+          <div className="flex items-center space-x-1.5 text-amber-300 font-mono text-[10px] bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full select-none shrink-0">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shadow-[0_0_6px_rgba(251,191,36,0.8)] animate-pulse shrink-0" />
+            <span className="font-semibold">Ambar Çevrimdışı</span>
+            {offlineCount > 0 && (
+              <>
+                <span className="text-amber-500/80">•</span>
+                <span>Tamponda {offlineCount} Evrak</span>
+              </>
+            )}
+          </div>
+        ) : isFlushing ? (
+          <div className="flex items-center space-x-1.5 text-emerald-300 font-mono text-[10px] bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full select-none shrink-0">
+            <RefreshCw className="w-3 h-3 text-emerald-400 animate-spin shrink-0" />
+            <span className="font-semibold">Tampon Eşitleniyor...</span>
+          </div>
+        ) : (
+          <div className="flex items-center space-x-1.5 text-slate-400 shrink-0">
+            <span className={`w-2 h-2 rounded-full ${isWsConnected ? 'bg-emerald-400 shadow-sm shadow-emerald-400/50 animate-pulse' : 'bg-amber-400'}`} />
+            <span className="text-[10px] hidden xs:inline">{isWsConnected ? 'Canlı Senkron (PC/Mobil)' : 'Senkron Bekliyor'}</span>
+          </div>
+        )}
         {selectedDoc && (
           <>
             <span className="text-slate-600 shrink-0">|</span>
