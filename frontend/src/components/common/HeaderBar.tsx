@@ -15,10 +15,11 @@ import {
   Check, 
   QrCode,
   Menu,
-  X
+  X,
+  HardDriveDownload
 } from 'lucide-react';
 import { BatchSummary, ApiKeyStatus, AppTheme, AppView } from '../../types/irsaliye';
-import { documentApi } from '../../services/api';
+import { documentApi, systemApi } from '../../services/api';
 
 interface HeaderBarProps {
   summary?: BatchSummary | null;
@@ -49,6 +50,7 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
   const [isExportOpen, setIsExportOpen] = useState(false);
   const [isThemeMenuOpen, setIsThemeMenuOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isBackingUp, setIsBackingUp] = useState(false);
   const exportRef = useRef<HTMLDivElement>(null);
   const themeRef = useRef<HTMLDivElement>(null);
 
@@ -210,6 +212,37 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
                 <FileJson className="w-3.5 h-3.5 text-amber-500" />
                 <span>Standart JSON (.json)</span>
               </a>
+
+              <div className="w-full h-px bg-theme-subtle my-1" />
+
+              <button
+                type="button"
+                onClick={async () => {
+                  setIsExportOpen(false);
+                  setIsBackingUp(true);
+                  try {
+                    const res = await systemApi.createBackup();
+                    if (res && res.filename) {
+                      const link = document.createElement('a');
+                      link.href = systemApi.getBackupDownloadUrl(res.filename);
+                      link.download = res.filename;
+                      document.body.appendChild(link);
+                      link.click();
+                      document.body.removeChild(link);
+                    }
+                  } catch (e) {
+                    console.error("Yedekleme hatası:", e);
+                  } finally {
+                    setIsBackingUp(false);
+                  }
+                }}
+                disabled={isBackingUp}
+                className="w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-lg text-xs text-cyan-400 hover:bg-theme-card-hover transition-colors"
+                title="Tek tıkla SQLite veritabanı, evrak görselleri ve SHA-256 sağlama yedeğini .tar.gz olarak indir"
+              >
+                <HardDriveDownload className={`w-3.5 h-3.5 ${isBackingUp ? 'animate-spin text-cyan-400' : 'text-cyan-400'}`} />
+                <span className="font-medium">{isBackingUp ? 'Arşivleniyor...' : 'Ambar Veri Tabanı Yedeği (.tar.gz)'}</span>
+              </button>
             </div>
           )}
         </div>

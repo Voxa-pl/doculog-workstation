@@ -6,7 +6,8 @@ import {
   RotateCw, 
   RotateCcw, 
   Contrast, 
-  RefreshCw 
+  RefreshCw,
+  Crop
 } from 'lucide-react';
 
 interface ViewerToolbarProps {
@@ -14,6 +15,8 @@ interface ViewerToolbarProps {
   rotation: number;
   contrastBoost: boolean;
   isSavingRotation: boolean;
+  isDeskewing?: boolean;
+  onDeskew?: () => void;
   onZoomIn: () => void;
   onZoomOut: () => void;
   onFitToScreen: () => void;
@@ -29,6 +32,8 @@ export const ViewerToolbar: React.FC<ViewerToolbarProps> = ({
   rotation,
   contrastBoost,
   isSavingRotation,
+  isDeskewing = false,
+  onDeskew,
   onZoomIn,
   onZoomOut,
   onFitToScreen,
@@ -134,6 +139,24 @@ export const ViewerToolbar: React.FC<ViewerToolbarProps> = ({
           <Contrast className="w-3.5 h-3.5" />
           <span className="hidden sm:inline font-medium text-[11px]">Kontrast {contrastBoost ? 'Açık' : ''}</span>
         </button>
+
+        {onDeskew && (
+          <button
+            type="button"
+            onClick={onDeskew}
+            disabled={isDeskewing || isSavingRotation}
+            className="flex items-center space-x-1 px-2 py-1 min-h-[34px] min-w-[34px] justify-center text-cyan-400 hover:text-cyan-300 hover:bg-cyan-950/40 border border-cyan-800/40 rounded-md tactile-btn disabled:opacity-50"
+            title="Evrak Eğikliğini / Perspektifini Düzelt (Auto Deskew)"
+            aria-label="Eğikliği Düzelt"
+          >
+            {isDeskewing ? (
+              <RefreshCw className="w-3.5 h-3.5 animate-spin text-cyan-400" />
+            ) : (
+              <Crop className="w-3.5 h-3.5" />
+            )}
+            <span className="hidden sm:inline font-medium text-[11px]">Düzelt</span>
+          </button>
+        )}
       </div>
     </div>
   );

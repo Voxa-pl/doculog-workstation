@@ -43,6 +43,8 @@ from ..services.validation import validate_vkn, validate_tckn, reconcile_purchas
 from ..services.qr_scanner import decode_qr_from_image, cross_verify_gib_qr
 from ..services.uetds import generate_uetds_payload, generate_uetds_xml
 from ..services.queue_manager import queue_manager, GLOBAL_AI_SEMAPHORE
+from ..services.backup_service import backup_service
+from ..services.erp_linter import erp_linter
 
 router = APIRouter()
 
@@ -913,4 +915,103 @@ async def get_document_uetds_payload(doc_id: str):
     xml_str = generate_uetds_xml(header, kalemler)
     payload["xml_preview"] = xml_str
     return payload
+
+@router.post("/documents/{doc_id}/deskew")
+async def deskew_document(doc_id: str):
+    """
+    Mobil / ambar ortamında çekilmiş eğik evrakların 4 köşe perspektifini veya
+    açısal yamukluğunu (Deskew) OpenCV ile otomatik tespit edip dikleştirir.
+    """
+    doc = doc_repo.get_by_id(doc_id)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Belge bulunamadı.")
+
+    target_path = Path(doc.dosya_yolu)
+    # PDF ise ilk sayfa görseli üzerinde işlem yap
+    if target_path.suffix.lower() == ".pdf" and doc.sayfalar and len(doc.sayfalar) > 0:
+        target_path = Path(doc.sayfalar[0])
+
+    if not target_path.exists():
+        raise HTTPException(status_code=404, detail="Evrak fiziksel dosyası bulunamadı.")
+
+    corrected, rectified_path, details = image_processor.detect_and_deskew_perspective(target_path)
+
+    if corrected:
+        # Küçük resmi (thumbnail) yenile
+        thumb_path = settings.UPLOAD_DIR / f"thumb_{doc.id}.jpg"
+        image_processor.generate_thumbnail(rectified_path, thumb_path)
+
+        doc.guncellenme_ts = int(datetime.now().timestamp() * 1000)
+        doc.boyut_bytes = rectified_path.stat().st_size
+        doc_repo.save(doc)
+
+        await ws_manager.broadcast_all({
+            "type": "DOCUMENT_UPDATED",
+            "document": doc.model_dump()
+        })
+        await ws_manager.broadcast_all({
+            "type": "DOCUMENTS_UPDATED",
+            "action": "deskew",
+            "document_id": doc.id,
+            "document": doc.model_dump()
+        })
+
+    return {
+        "success": True,
+        "corrected": corrected,
+        "details": details,
+        "document": doc
+    }
+
+@router.get("/documents/{doc_id}/erp-lint")
+async def get_document_erp_lint(doc_id: str):
+    """
+    Belgenin Logo Tiger STFICHE, SAP S/4HANA MIGO (101 Mal Girişi) ve U-ETDS
+    şemalarına tam uyumluluğunu denetler, alan bazlı skor ve canlı yük önizlemeleri üretir.
+    """
+    doc = doc_repo.get_by_id(doc_id)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Belge bulunamadı.")
+
+    header = doc.veri.header.model_dump() if doc.veri and doc.veri.header else {}
+    kalemler = [k.model_dump() for k in doc.veri.kalemler] if doc.veri and doc.veri.kalemler else []
+
+    lint_report = erp_linter.lint_document(header, kalemler)
+    return lint_report
+
+@router.post("/system/backup/create")
+async def create_backup():
+    """
+    Disaster Recovery: SQLite WAL checkpoint uygulayarak veritabanı, yüklemeler ve küçük resimleri
+    SHA-256 sağlama özeti ile timestamped .tar.gz arşivi haline getirir.
+    """
+    try:
+        backup_result = backup_service.create_system_backup()
+        return backup_result
+    except Exception as e:
+        logger.error(f"Sistem yedekleme oluşturulurken hata: {e}")
+        raise HTTPException(status_code=500, detail=f"Yedekleme oluşturulamadı: {str(e)}")
+
+@router.get("/system/backup/status")
+async def get_backup_status():
+    """
+    Mevcut felaket kurtarma yedeklerini, veri tabanı ve görsel depolama boyutunu raporlar.
+    """
+    return backup_service.get_backup_status()
+
+@router.get("/system/backup/download/{filename}")
+async def download_backup(filename: str):
+    """
+    Oluşturulmuş .tar.gz felaket kurtarma arşivini güvenli şekilde indirir.
+    """
+    backup_file = backup_service.get_backup_path_by_name(filename)
+    if not backup_file or not backup_file.exists():
+        raise HTTPException(status_code=404, detail="İstenen yedek arşiv dosyası bulunamadı.")
+
+    return FileResponse(
+        path=backup_file,
+        media_type="application/gzip",
+        filename=backup_file.name
+    )
+
 

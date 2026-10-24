@@ -14,6 +14,8 @@ backend/uploads/*
 !backend/uploads/.gitkeep
 backend/exports/*
 !backend/exports/.gitkeep
+backend/backups/*
+!backend/backups/.gitkeep
 test_data/
 screenshots/
 

@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { DocumentItem } from '../../types/irsaliye';
 import { ViewerToolbar } from './ViewerToolbar';
+import { documentApi } from '../../services/api';
 import { 
   FileQuestion, 
   Sparkles, 
@@ -31,6 +32,7 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [isSavingRotation, setIsSavingRotation] = useState(false);
+  const [isDeskewing, setIsDeskewing] = useState(false);
   const [isHandingOff, setIsHandingOff] = useState(false);
   const [activePageIndex, setActivePageIndex] = useState(0);
 
@@ -207,6 +209,23 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
 
   const handleRotateClockwise = () => handleRotate(90);
   const handleRotateCounterClockwise = () => handleRotate(-90);
+
+  const handleDeskew = async () => {
+    if (!document || isDeskewing) return;
+    setIsDeskewing(true);
+    try {
+      await documentApi.deskewDocument(document.id);
+      const nextVersion = Date.now();
+      setImageVersion(nextVersion);
+      setRotation(0);
+      rotationRef.current = 0;
+      handleFitToScreen(0);
+    } catch (err) {
+      console.error('Deskew failed:', err);
+    } finally {
+      setIsDeskewing(false);
+    }
+  };
 
   const handleWheel = (e: React.WheelEvent) => {
     e.preventDefault();
@@ -404,6 +423,8 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
           rotation={safeRotation}
           contrastBoost={contrastBoost}
           isSavingRotation={isSavingRotation}
+          isDeskewing={isDeskewing}
+          onDeskew={handleDeskew}
           onZoomIn={handleZoomIn}
           onZoomOut={handleZoomOut}
           onFitToScreen={() => handleFitToScreen()}

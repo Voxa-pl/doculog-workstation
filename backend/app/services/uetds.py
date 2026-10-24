@@ -37,6 +37,7 @@ COMMON_DISTRICTS = {
     "TOKAT": ["MERKEZ", "TURHAL", "ERBAA", "NİKSAR", "ZİLE"]
 }
 
+TURKISH_PLATE_REGEX = re.compile(r"^(0[1-9]|[1-7][0-9]|8[01])[A-Z]{1,3}\d{2,4}$")
 
 def tr_upper(text: Optional[str]) -> str:
     """

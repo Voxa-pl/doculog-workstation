@@ -23,6 +23,9 @@ import {
   Layers, 
   RefreshCw, 
   ShieldAlert,
+  ShieldCheck,
+  Terminal,
+  Code2,
   Trash2,
   Copy,
   Check,
@@ -90,6 +93,10 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
   const [isUetdsModalOpen, setIsUetdsModalOpen] = useState(false);
   const [uetdsViewFormat, setUetdsViewFormat] = useState<'summary' | 'json' | 'xml'>('summary');
   const [isCopiedUetds, setIsCopiedUetds] = useState(false);
+  const [erpLintData, setErpLintData] = useState<any | null>(null);
+  const [isErpModalOpen, setIsErpModalOpen] = useState(false);
+  const [activeErpTab, setActiveErpTab] = useState<'logo' | 'sap' | 'uetds'>('logo');
+  const [isCopiedSnippet, setIsCopiedSnippet] = useState(false);
   const [suspiciousCount, setSuspiciousCount] = useState(0);
   const exportMenuRef = useRef<HTMLDivElement>(null);
   const jumpTimerRef = useRef<number | null>(null);
@@ -128,6 +135,17 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
       setGibQrData(null);
     }
   }, [document?.id, document?.durum]);
+
+  // Kurumsal ERP Şema Linter & Validator
+  useEffect(() => {
+    if (document?.id && document.durum !== 'kuyrukta') {
+      documentApi.getErpLint(document.id)
+        .then(res => setErpLintData(res))
+        .catch(() => setErpLintData(null));
+    } else {
+      setErpLintData(null);
+    }
+  }, [document?.id, document?.durum, formData]);
 
   // Şüpheli alan sayısını güncelle
   useEffect(() => {
@@ -544,6 +562,19 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
                   <span className="hidden xl:inline text-[11px]">ERP Kopyala</span>
                 </>
               )}
+            </button>
+          )}
+
+          {/* Kurumsal ERP Linter & Şema Doğrulayıcı Butonu */}
+          {!isNonInvoice && erpLintData && (
+            <button
+              type="button"
+              onClick={() => setIsErpModalOpen(true)}
+              className="flex items-center space-x-1.5 bg-blue-950/40 hover:bg-blue-900/50 text-blue-300 border border-blue-500/30 py-2 px-2.5 min-h-[38px] rounded-lg text-xs font-semibold shrink-0 tactile-btn"
+              title="Logo Tiger, SAP S/4HANA ve U-ETDS Kurumsal Doğrulama Konsolu"
+            >
+              <ShieldCheck className="w-3.5 h-3.5 text-blue-400" />
+              <span className="font-mono text-[11px] font-bold">ERP Linter %{Math.round(erpLintData.overall_score || 0)}</span>
             </button>
           )}
 
@@ -1159,6 +1190,182 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
                   )}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Kurumsal ERP Şema Linter & Validator Modalı */}
+      {isErpModalOpen && erpLintData && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-theme-surface border border-theme-strong rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            {/* Modal Başlık */}
+            <div className="p-4 border-b border-theme-subtle flex items-center justify-between bg-theme-surface">
+              <div className="flex items-center space-x-2.5">
+                <div className="w-8 h-8 rounded-lg bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400">
+                  <ShieldCheck className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-theme-primary flex items-center gap-2">
+                    <span>Kurumsal ERP Şema Doğrulayıcı & Canlı Konsol</span>
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold ${
+                      erpLintData.overall_score >= 80 ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                    }`}>
+                      %{Math.round(erpLintData.overall_score)} Uyumlu
+                    </span>
+                  </h3>
+                  <p className="text-[11px] text-theme-muted">
+                    Logo Tiger, SAP S/4HANA (MIGO 101) ve U-ETDS Bakanlık Şema Denetimi
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsErpModalOpen(false)}
+                className="p-1.5 text-theme-muted hover:text-theme-primary rounded-lg hover:bg-theme-card transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Modal Gövde */}
+            <div className="p-4 overflow-y-auto space-y-4 flex-1">
+              {/* 3 Sistem Karşılaştırmalı Skor Kartları */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                {/* Logo Tiger */}
+                <div className={`p-3 rounded-xl border ${
+                  activeErpTab === 'logo' ? 'border-blue-500 bg-blue-950/20 ring-1 ring-blue-500/30' : 'border-theme-subtle bg-theme-card hover:border-theme-strong'
+                } cursor-pointer transition-all`} onClick={() => setActiveErpTab('logo')}>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[11px] font-bold text-theme-primary">Logo Tiger 3</span>
+                    <span className="text-xs font-mono font-bold text-blue-400">%{Math.round(erpLintData.logo_tiger?.score || 0)}</span>
+                  </div>
+                  <p className="text-[10px] text-theme-muted">STFICHE 01 Satın Alma</p>
+                  <div className="mt-2 text-[10px] flex items-center gap-1.5">
+                    <span className={`w-1.5 h-1.5 rounded-full ${erpLintData.logo_tiger?.critical_count === 0 ? 'bg-emerald-400' : 'bg-rose-400'}`} />
+                    <span className="text-theme-secondary">
+                      {erpLintData.logo_tiger?.critical_count === 0 ? 'Aktarıma Hazır' : `${erpLintData.logo_tiger?.critical_count} Kritik Engel`}
+                    </span>
+                  </div>
+                </div>
+
+                {/* SAP S/4HANA */}
+                <div className={`p-3 rounded-xl border ${
+                  activeErpTab === 'sap' ? 'border-blue-500 bg-blue-950/20 ring-1 ring-blue-500/30' : 'border-theme-subtle bg-theme-card hover:border-theme-strong'
+                } cursor-pointer transition-all`} onClick={() => setActiveErpTab('sap')}>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[11px] font-bold text-theme-primary">SAP S/4HANA</span>
+                    <span className="text-xs font-mono font-bold text-emerald-400">%{Math.round(erpLintData.sap_migo_101?.score || 0)}</span>
+                  </div>
+                  <p className="text-[10px] text-theme-muted">BAPI MIGO 101 Mal Girişi</p>
+                  <div className="mt-2 text-[10px] flex items-center gap-1.5">
+                    <span className={`w-1.5 h-1.5 rounded-full ${erpLintData.sap_migo_101?.critical_count === 0 ? 'bg-emerald-400' : 'bg-rose-400'}`} />
+                    <span className="text-theme-secondary">
+                      {erpLintData.sap_migo_101?.critical_count === 0 ? 'Aktarıma Hazır' : `${erpLintData.sap_migo_101?.critical_count} Kritik Engel`}
+                    </span>
+                  </div>
+                </div>
+
+                {/* U-ETDS */}
+                <div className={`p-3 rounded-xl border ${
+                  activeErpTab === 'uetds' ? 'border-blue-500 bg-blue-950/20 ring-1 ring-blue-500/30' : 'border-theme-subtle bg-theme-card hover:border-theme-strong'
+                } cursor-pointer transition-all`} onClick={() => setActiveErpTab('uetds')}>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[11px] font-bold text-theme-primary">U-ETDS Bakanlık</span>
+                    <span className="text-xs font-mono font-bold text-purple-400">%{Math.round(erpLintData.uetds?.score || 0)}</span>
+                  </div>
+                  <p className="text-[10px] text-theme-muted">Yük Bildirim Gateway</p>
+                  <div className="mt-2 text-[10px] flex items-center gap-1.5">
+                    <span className={`w-1.5 h-1.5 rounded-full ${erpLintData.uetds?.critical_count === 0 ? 'bg-emerald-400' : 'bg-amber-400'}`} />
+                    <span className="text-theme-secondary">
+                      {erpLintData.uetds?.critical_count === 0 ? 'Sefer Doğrulandı' : `${erpLintData.uetds?.warning_count} Eksik Alan`}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Seçili Sistemin Hata ve Uyarı Maddeleri */}
+              <div className="p-3 bg-theme-card rounded-xl border border-theme-subtle space-y-2">
+                <span className="text-[11px] font-bold text-theme-primary flex items-center gap-1.5">
+                  <Terminal className="w-3.5 h-3.5 text-blue-400" />
+                  <span>Şema Doğrulama Bulguları ({activeErpTab.toUpperCase()})</span>
+                </span>
+                <div className="space-y-1.5 max-h-40 overflow-y-auto">
+                  {((activeErpTab === 'logo' ? erpLintData.logo_tiger?.issues :
+                     activeErpTab === 'sap' ? erpLintData.sap_migo_101?.issues :
+                     erpLintData.uetds?.issues) || []).map((issue: any, idx: number) => (
+                    <div key={idx} className="flex items-start gap-2 p-2 rounded-lg bg-theme-surface/50 border border-theme-subtle/50 text-[11px]">
+                      <span className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold shrink-0 ${
+                        issue.severity === 'CRITICAL' ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30' :
+                        issue.severity === 'WARNING' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' :
+                        'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                      }`}>
+                        {issue.severity}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <span className="font-mono text-theme-muted text-[10px] block">{issue.field}</span>
+                        <span className="text-theme-secondary">{issue.message}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Canlı Yük Önizleme Sandkutusu (Live Sandbox) */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-theme-primary flex items-center gap-1.5">
+                    <Code2 className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Canlı ERP Yükü (Live Payload Sandbox)</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const snippet = activeErpTab === 'logo' ? erpLintData.live_previews?.logo_xml_preview :
+                                     activeErpTab === 'sap' ? JSON.stringify(erpLintData.live_previews?.sap_bapi_preview, null, 2) :
+                                     erpLintData.live_previews?.uetds_xml_preview;
+                      navigator.clipboard.writeText(snippet || '');
+                      setIsCopiedSnippet(true);
+                      setTimeout(() => setIsCopiedSnippet(false), 2000);
+                    }}
+                    className="flex items-center space-x-1 px-2.5 py-1 rounded-md text-[10px] font-semibold bg-theme-card hover:bg-theme-card-hover text-theme-primary border border-theme-subtle transition-all"
+                  >
+                    {isCopiedSnippet ? (
+                      <>
+                        <Check className="w-3 h-3 text-emerald-400" />
+                        <span className="text-emerald-400">Kopyalandı!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3 h-3 text-blue-400" />
+                        <span>Kodu Kopyala</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+                <div className="bg-black/70 border border-theme-subtle rounded-xl p-3 font-mono text-[11px] text-emerald-400/90 max-h-48 overflow-y-auto">
+                  <pre className="whitespace-pre-wrap break-all">
+                    {activeErpTab === 'logo' ? erpLintData.live_previews?.logo_xml_preview :
+                     activeErpTab === 'sap' ? JSON.stringify(erpLintData.live_previews?.sap_bapi_preview, null, 2) :
+                     erpLintData.live_previews?.uetds_xml_preview}
+                  </pre>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Alt Çubuk */}
+            <div className="p-3 border-t border-theme-subtle flex items-center justify-between bg-theme-surface">
+              <span className="text-[10px] text-theme-muted font-mono flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                <span>SAP BAPI & Logo STFICHE Standartları Doğrulandı</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => setIsErpModalOpen(false)}
+                className="px-4 py-1.5 rounded-lg bg-theme-card hover:bg-theme-card-hover text-theme-secondary hover:text-theme-primary text-xs font-semibold border border-theme-subtle transition-all"
+              >
+                Kapat
+              </button>
             </div>
           </div>
         </div>

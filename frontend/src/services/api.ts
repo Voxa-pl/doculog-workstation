@@ -101,6 +101,16 @@ export const documentApi = {
     return res.data;
   },
 
+  deskewDocument: async (id: string): Promise<{ success: boolean; corrected: boolean; details: any; document: DocumentItem }> => {
+    const res = await api.post(`/documents/${id}/deskew`);
+    return res.data;
+  },
+
+  getErpLint: async (id: string): Promise<any> => {
+    const res = await api.get(`/documents/${id}/erp-lint`);
+    return res.data;
+  },
+
   getSingleExcelUrl: (id: string) => `/api/documents/${id}/export-excel`,
   getSingleLogoXmlUrl: (id: string) => `/api/documents/${id}/export-logo-xml`,
   getSingleJsonUrl: (id: string) => `/api/documents/${id}/export-json`,
@@ -139,4 +149,20 @@ export const analyticsApi = {
 
   getExportReportUrl: (): string => '/api/analytics/export-report',
   exportExecutiveReportUrl: (): string => '/api/analytics/export-report',
+};
+
+export const systemApi = {
+  createBackup: async (): Promise<any> => {
+    const res = await api.post('/system/backup/create');
+    return res.data;
+  },
+
+  getBackupStatus: async (): Promise<any> => {
+    const res = await api.get('/system/backup/status');
+    return res.data;
+  },
+
+  getBackupDownloadUrl: (filename: string): string => {
+    return `/api/system/backup/download/${encodeURIComponent(filename)}`;
+  },
 };
