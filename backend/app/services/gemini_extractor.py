@@ -1,6 +1,8 @@
 import os
+import re
 import json
 import base64
+import random
 import socket
 import time
 import logging
@@ -13,6 +15,7 @@ from google.genai import types, errors
 
 from ..core.config import settings
 from ..models.irsaliye import IrsaliyeData, IrsaliyeHeader, LineItem
+from .image_processor import image_processor
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +41,9 @@ GÖREVİN:
 Sana sunulan görseldeki Sevk İrsaliyesi, e-İrsaliye çıktısı veya ambar teslim fişini en yüksek hassasiyetle inceleyip, istenen JSON şemasına birebir uygun yapılandırılmış veri üretmektir.
 
 TÜRKİYE LOJİSTİK VE İRSALİYE KURALLARI:
-1. İRSALİYE NO: Belge üzerindeki matbu seri-sıra numarasını (Örn: A-123456, GIB2024000001234, TRS202400005432) eksiksiz tespit et.
+1. İRSALİYE NO:
+   - e-İrsaliye ise VUK 509 standardı gereği kesinlikle 16 haneli resmi belge numarasını al (Örn: GIB2024000001234, TRS202600005432). Sipariş no veya onay kodlarını irsaliye no sanma.
+   - Matbu sevk irsaliyesi ise seri harfi ve sıra numarasını eksiksiz tespit et (Örn: A-123456, B 045129).
 2. TARİHLER:
    - Düzenleme Tarihi: İrsaliyenin düzenlendiği tarih (GG.AA.YYYY formatında döndür).
    - Fiili Sevk Tarihi: Malların depodan çıktığı sevk tarihi (Varsa GG.AA.YYYY).
@@ -51,14 +56,17 @@ TÜRKİYE LOJİSTİK VE İRSALİYE KURALLARI:
    - sira_no: 1'den başlayan sıra numarası.
    - mal_hizmet: Ürün veya malzeme cinsi/tanımı (Örn: '100x120 Ahşap Euro Palet', 'Karton Koli 40x30x20', 'Galvaniz Rulo Saç').
    - miktar: Sayısal miktar (float veya int).
-   - birim: Standart Türk lojistik birimleri (Adet, Koli, Palet, Kg, Ton, Çuval, Bağ, Kutu, Paket, Teneke, Metre).
+   - birim: Standart Türk lojistik birimleri (Adet, Koli, Palet, Kg, Ton, Çuval, Bağ, Kutu, Paket, Teneke, Metre). Ürün cinsi içinde 'Kg', 'Ton', 'Palet' açıkça belirtilmişse varsayılan 'Adet' atama!
    - birim_fiyat ve tutar: Belirtilmişse al, yoksa null bırak.
-7. EL YAZILARI, KAŞE VE İMZALAR:
-   - Şoför veya ambar şefinin el yazısıyla düştüğü teslim notları (Örn: '2 koli hasarlı teslim edildi', 'Eksiksiz teslim alındı', 'Kaşe ve imza mevcut') genel_notlar alanına yazılmalıdır.
-8. OKUNABİLİRLİK VE GÜVEN:
+   - KESİNLİKLE 'NAKLİ YEKÛN', 'ÖNCEKİ SAYFADAN DEVİR' veya 'ARA TOPLAM' satırlarını bağımsız ürün kalemi olarak ekleme!
+7. NOKTA VURUŞLU (DOT-MATRIX) YAZICI VE KARBON NÜSHA KAYMALARI:
+   - İğneli yazıcılardan basılmış formlarda başlık veya miktar kaymalarını doğru sütunla eşleştir; formun matbu şablon yazılarıyla dinamik doldurulmuş verileri birbirine karıştırma.
+8. EL YAZILARI, AMBAR KAŞE VE İMZALARI:
+   - Şoför veya ambar şefinin düştüğü hukuki teslimat şerhlerini (Örn: '2 koli hasarlı teslim alındı', 'Islak ambalaj', 'Eksiksiz kabul', 'Kaşe ve imza mevcut') genel_notlar alanına eksiksiz yaz.
+9. OKUNABİLİRLİK VE GÜVEN:
    - Buruşukluk, gölge, eğrilik veya el yazısı zorluğuna göre guven_skoru (0.0 - 1.0) ve okunabilirlik_durumu ('net', 'orta', 'zor_okunur') belirle.
-9. ALAN BAZLI GÜVENLİK SKORLARI (alan_guvenlikleri):
-   - Başlık alanlarının netliğine göre her biri için (irsaliye_no, duzenleme_tarihi, sevk_tarihi, gonderici_vkn, alici_vkn, alici_unvan, plaka vb.) 0.0 ile 1.0 arasında bir güven skoru üret. Net okunan alanlar 0.90+, silik/el yazılı şüpheli alanlar 0.70 altı olmalıdır.
+10. ALAN BAZLI GÜVENLİK SKORLARI (alan_guvenlikleri):
+    - Başlık alanlarının netliğine göre her biri için (irsaliye_no, duzenleme_tarihi, sevk_tarihi, gonderici_vkn, alici_vkn, alici_unvan, plaka vb.) 0.0 ile 1.0 arasında bir güven skoru üret.
 
 Tüm metinleri orijinal Türkçe karakterleriyle (ç, ğ, ı, ö, ş, ü, İ) eksiksiz aktar."""
 
@@ -148,15 +156,18 @@ class GeminiExtractor:
             return fallback
 
         try:
+            # Bellek sızıntısı ve gecikmeyi önleyen akıllı optik boyutlandırma (2560px max)
+            opt_main_path = image_processor.optimize_image_for_gemini(image_path)
             parts = []
-            with open(image_path, "rb") as f:
+            with open(opt_main_path, "rb") as f:
                 parts.append(types.Part.from_bytes(data=f.read(), mime_type=mime_type))
 
             # Çoklu sayfa desteği
             if additional_pages:
                 for add_page in additional_pages:
                     if add_page and add_page.exists() and add_page != image_path:
-                        with open(add_page, "rb") as f_add:
+                        opt_add_page = image_processor.optimize_image_for_gemini(add_page)
+                        with open(opt_add_page, "rb") as f_add:
                             parts.append(types.Part.from_bytes(data=f_add.read(), mime_type="image/jpeg"))
 
             schema = IrsaliyeData.model_json_schema()
@@ -168,19 +179,23 @@ class GeminiExtractor:
             )
             parts.append(prompt_text)
 
-            # Yalnızca Gemini 3.5 ve 3.6 serisi modeller (kullanıcı kısıtı)
+            # Yalnızca Gemini 3.5 ve 3.6 serisi modeller (kullanıcı kısıtı) - En yetkin 3.6-flash öncelikli
             models_to_try = [
                 settings.GEMINI_MODEL,
-                "gemini-3.5-flash",
-                "gemini-3.5-flash-lite",
                 "gemini-3.6-flash",
+                "gemini-3.5-flash",
                 "gemini-3.6-flash-lite",
+                "gemini-3.5-flash-lite",
             ]
             # Kesin kural: Sadece 3.5 ve 3.6 serisine ait modeller kabul edilir
             models_to_try = [
                 m for m in dict.fromkeys(models_to_try)
                 if m and ("3.5" in m or "3.6" in m)
             ]
+            # gemini-3.6-flash'ı en başa al (en yüksek optik ve Türkçe görme performansı)
+            if "gemini-3.6-flash" in models_to_try and models_to_try[0] != "gemini-3.6-flash":
+                models_to_try.remove("gemini-3.6-flash")
+                models_to_try.insert(0, "gemini-3.6-flash")
 
             last_error: Optional[Exception] = None
             output_text: Optional[str] = None
@@ -204,8 +219,9 @@ class GeminiExtractor:
                         code = getattr(api_err, "code", None)
                         err_msg = str(api_err).lower()
                         if code == 429 or "429" in err_msg or "resource_exhausted" in err_msg or "quota" in err_msg:
-                            logger.warning(f"[{model_name}] Gemini API kota sınırı (429), {1.2 * (attempt + 1)}s bekleniyor...")
-                            time.sleep(1.2 * (attempt + 1))
+                            sleep_time = random.uniform(0.8, 1.8) * (2 ** attempt)
+                            logger.warning(f"[{model_name}] Gemini API kota sınırı (429), {sleep_time:.2f}s bekleniyor (Full Jitter)...")
+                            time.sleep(sleep_time)
                             continue
                         else:
                             logger.warning(f"[{model_name}] Gemini APIError ({code}): {api_err}")
@@ -264,7 +280,7 @@ class GeminiExtractor:
 
             try:
                 validated_data = IrsaliyeData.model_validate(data_dict)
-                # QR Zenginleştirmesi (Data Enrichment)
+                # Kriptografik GİB Karekod verisi optik halüsinasyonları kesinlikle ezer (Ground Truth Overwrite)
                 if qr_data_obj and validated_data.header:
                     if qr_data_obj.ettn:
                         validated_data.header.ettn = qr_data_obj.ettn
@@ -273,16 +289,24 @@ class GeminiExtractor:
                             validated_data.genel_notlar = ettn_str
                         elif qr_data_obj.ettn not in validated_data.genel_notlar:
                             validated_data.genel_notlar = f"{validated_data.genel_notlar} | {ettn_str}"
-                    if qr_data_obj.irsaliye_no and (not validated_data.header.irsaliye_no or len(validated_data.header.irsaliye_no) < 6):
+                    if qr_data_obj.irsaliye_no:
                         validated_data.header.irsaliye_no = qr_data_obj.irsaliye_no
-                    if qr_data_obj.gonderici_vkn_tckn and not validated_data.header.gonderici_vkn:
+                    if qr_data_obj.gonderici_vkn_tckn:
                         validated_data.header.gonderici_vkn = qr_data_obj.gonderici_vkn_tckn
-                    if qr_data_obj.alici_vkn_tckn and not validated_data.header.alici_vkn:
+                    if qr_data_obj.alici_vkn_tckn:
                         validated_data.header.alici_vkn = qr_data_obj.alici_vkn_tckn
-                    if qr_data_obj.belge_tarihi and not validated_data.header.duzenleme_tarihi:
+                    if qr_data_obj.belge_tarihi:
                         validated_data.header.duzenleme_tarihi = qr_data_obj.belge_tarihi
-                    if qr_data_obj.belge_tarihi and not validated_data.header.sevk_tarihi:
-                        validated_data.header.sevk_tarihi = qr_data_obj.belge_tarihi
+                        if not validated_data.header.sevk_tarihi:
+                            validated_data.header.sevk_tarihi = qr_data_obj.belge_tarihi
+
+                # Çok sayfalı irsaliyelerde mükerrer ara toplam / nakli yekûn satırlarını temizle
+                if validated_data.kalemler:
+                    validated_data.kalemler = self._filter_subtotal_rows(validated_data.kalemler)
+
+                # Deterministik GİB Modulo-10 ve matematiksel mutabakat kalibrasyonu
+                validated_data = self._calibrate_confidence_scores(validated_data, has_qr=bool(qr_data_obj))
+
                 return validated_data
             except Exception as val_err:
                 logger.error(f"Ayrıştırılan JSON şemaya uymadı: {val_err}")
@@ -293,6 +317,81 @@ class GeminiExtractor:
         except Exception as e:
             logger.error(f"[GeminiExtractor HATA] {image_path.name} ayrıştırılırken beklenmeyen istisna: {e}")
             raise
+
+    @staticmethod
+    def _filter_subtotal_rows(kalemler: List[LineItem]) -> List[LineItem]:
+        """
+        Çok sayfalı irsaliyelerde sayfa altlarındaki Nakli Yekûn, Ara Toplam veya
+        Önceki Sayfadan Devir gibi ara toplam satırlarının mükerrer ürün kalemi olarak
+        eklenmesini engeller.
+        """
+        subtotal_pattern = re.compile(
+            r"(?i)(nakli\s*yek[uû]n|ara\s*toplam|devir|nakl-i\s*yekun|sayfa\s*toplam|yek[uû]n)",
+            re.UNICODE
+        )
+        filtered = []
+        for item in kalemler:
+            name = (item.mal_hizmet or "").strip()
+            if subtotal_pattern.search(name):
+                logger.info(f"Mükerrer ara toplam satırı elendi: '{name}' (Miktar: {item.miktar})")
+                continue
+            item.sira_no = len(filtered) + 1
+            filtered.append(item)
+        return filtered
+
+    @staticmethod
+    def _calibrate_confidence_scores(data: IrsaliyeData, has_qr: bool) -> IrsaliyeData:
+        """
+        LLM'in halüsinatif yüksek güven skorlarını (overconfidence) deterministik
+        mali kurallarla kalibre eder:
+        1. VKN Modulo-10 doğrulaması (validate_vkn)
+        2. GİB Kriptografik Karekod varlığı
+        3. Matematiksel kalemler toplamı vs genel dip toplam tutarlılığı
+        """
+        from .validation import validate_vkn, validate_tckn
+
+        llm_score = data.guven_skoru or 0.85
+        score_vkn = 0.5
+        vkn = data.header.gonderici_vkn if data.header else None
+        if vkn:
+            v_clean = re.sub(r"\D", "", vkn)
+            if len(v_clean) == 10 and validate_vkn(v_clean):
+                score_vkn = 1.0
+            elif len(v_clean) == 11 and validate_tckn(v_clean):
+                score_vkn = 1.0
+            else:
+                score_vkn = 0.3
+
+        # Matematiksel mutabakat kontrolü
+        score_math = 0.7
+        if data.kalemler and data.genel_toplam_miktar is not None:
+            sum_qty = sum(k.miktar or 0 for k in data.kalemler)
+            diff = abs(sum_qty - data.genel_toplam_miktar)
+            if diff < 0.05:
+                score_math = 1.0
+            elif diff < 1.0:
+                score_math = 0.85
+            else:
+                score_math = 0.5
+
+        # Ağırlıklı kalibrasyon (Kriptografik GİB Karekod varlığı ana teminat faktörüdür)
+        if has_qr:
+            score_qr = 1.0
+            calibrated = (0.20 * llm_score) + (0.30 * score_vkn) + (0.35 * score_qr) + (0.15 * score_math)
+        else:
+            score_qr = 0.5
+            calibrated = (0.40 * llm_score) + (0.30 * score_vkn) + (0.15 * score_qr) + (0.15 * score_math)
+
+        data.guven_skoru = round(min(max(calibrated, 0.1), 0.99), 2)
+
+        if data.guven_skoru >= 0.88:
+            data.okunabilirlik_durumu = "net"
+        elif data.guven_skoru >= 0.65:
+            data.okunabilirlik_durumu = "orta"
+        else:
+            data.okunabilirlik_durumu = "zor_okunur"
+
+        return data
 
     def _generate_realistic_fallback_data(self, filename: str) -> IrsaliyeData:
         return IrsaliyeData(

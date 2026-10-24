@@ -311,11 +311,24 @@ def _run_ai_extraction(doc_id: str):
     if not doc:
         return
     try:
+        # Otomatik Deskew & Perspektif Ön Düzeltme (AI öncesi evrakı dikleştir)
+        main_file = Path(doc.dosya_yolu)
+        if main_file.exists() and main_file.suffix.lower() in (".jpg", ".jpeg", ".png"):
+            try:
+                corrected, rectified_path, _ = image_processor.detect_and_deskew_perspective(main_file)
+                if corrected:
+                    thumb_path = settings.UPLOAD_DIR / f"thumb_{doc.id}.jpg"
+                    image_processor.generate_thumbnail(rectified_path, thumb_path)
+            except Exception as deskew_err:
+                print(f"[Optik Deskew Hata] {doc_id}: {deskew_err}")
+
         add_pages = []
         if doc.sayfalar and len(doc.sayfalar) > 1:
             for p_url in doc.sayfalar[1:]:
-                fname = p_url.split("/")[-1]
-                add_pages.append(settings.UPLOAD_DIR / fname)
+                fname = p_url.split("/")[-1].split("?")[0]
+                p_path = settings.UPLOAD_DIR / fname
+                if p_path.exists():
+                    add_pages.append(p_path)
 
         extracted_data = gemini_extractor.extract_from_image(
             image_path=Path(doc.dosya_yolu),
@@ -382,8 +395,18 @@ async def process_document(doc_id: str):
     return doc_repo.get_by_id(doc_id)
 
 async def _run_batch_worker(doc_ids: List[str]):
-    """Toplu evrak işlemede API kota patlamasını (503/504) önleyen sıralı worker."""
+    """Toplu evrak işlemede API kota patlamasını (503/504) önleyen lazy status mutasyonlu sıralı worker."""
     for doc_id in doc_ids:
+        doc = doc_repo.get_by_id(doc_id)
+        if doc and doc.durum != ProcessingStatus.ISLENIYOR:
+            doc.durum = ProcessingStatus.ISLENIYOR
+            doc_repo.save(doc)
+            await ws_manager.broadcast_all({
+                "type": "DOCUMENTS_UPDATED",
+                "action": "process_started",
+                "document_id": doc_id,
+                "durum": ProcessingStatus.ISLENIYOR.value
+            })
         await queue_manager.process_document_safe(doc_id, _run_ai_extraction)
         await asyncio.sleep(0.8)  # Kota nefes alma payı
 
@@ -412,16 +435,13 @@ async def get_queue_status():
 async def process_all_documents(background_tasks: BackgroundTasks):
     docs = doc_repo.get_all()
     to_process = [d for d in docs if d.durum in (ProcessingStatus.KUYRUKTA, ProcessingStatus.HATA)]
-    for doc in to_process:
-        doc.durum = ProcessingStatus.ISLENIYOR
-        doc_repo.save(doc)
     
     if to_process:
         doc_ids = [d.id for d in to_process]
         background_tasks.add_task(_run_batch_worker, doc_ids)
         await ws_manager.broadcast_all({
             "type": "DOCUMENTS_UPDATED",
-            "action": "batch_process_started",
+            "action": "batch_process_queued",
             "count": len(to_process)
         })
     return {"mesaj": "Toplu işlem kontrollü kuyrukla başlatıldı", "islenen_adet": len(to_process)}
@@ -896,7 +916,8 @@ async def get_document_gib_qr(doc_id: str):
 
     # PDF ise ilk sayfa görseli üzerinde tara
     if file_path.lower().endswith('.pdf') and doc.sayfalar and len(doc.sayfalar) > 0:
-        file_path = doc.sayfalar[0]
+        first_page_name = doc.sayfalar[0].split("/")[-1].split("?")[0]
+        file_path = str(settings.UPLOAD_DIR / first_page_name)
 
     qr_res = decode_qr_from_image(file_path)
     verification = cross_verify_gib_qr(qr_res, header)
@@ -929,7 +950,8 @@ async def deskew_document(doc_id: str):
     target_path = Path(doc.dosya_yolu)
     # PDF ise ilk sayfa görseli üzerinde işlem yap
     if target_path.suffix.lower() == ".pdf" and doc.sayfalar and len(doc.sayfalar) > 0:
-        target_path = Path(doc.sayfalar[0])
+        first_page_name = doc.sayfalar[0].split("/")[-1].split("?")[0]
+        target_path = settings.UPLOAD_DIR / first_page_name
 
     if not target_path.exists():
         raise HTTPException(status_code=404, detail="Evrak fiziksel dosyası bulunamadı.")

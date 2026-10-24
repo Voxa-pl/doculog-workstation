@@ -125,9 +125,9 @@ class ConnectionManager:
         try:
             if lock:
                 async with lock:
-                    await websocket.send_json(data)
+                    await asyncio.wait_for(websocket.send_json(data), timeout=2.0)
             else:
-                await websocket.send_json(data)
+                await asyncio.wait_for(websocket.send_json(data), timeout=2.0)
             return True
         except Exception as e:
             logger.debug(f"WebSocket send failed: {e}")
@@ -135,23 +135,27 @@ class ConnectionManager:
 
     async def send_to_session(self, session_id: str, data: dict):
         if session_id in self.active_sessions:
-            dead_sockets = []
-            for connection in list(self.active_sessions[session_id]):
-                success = await self._safe_send_json(connection, data)
-                if not success:
-                    dead_sockets.append(connection)
-            for dead in dead_sockets:
-                self.disconnect(dead, session_id)
+            connections = list(self.active_sessions[session_id])
+            if connections:
+                tasks = [self._safe_send_json(c, data) for c in connections]
+                results = await asyncio.gather(*tasks, return_exceptions=True)
+                for c, success in zip(connections, results):
+                    if success is not True:
+                        self.disconnect(c, session_id)
 
     async def broadcast_all(self, data: dict):
+        tasks = []
+        target_connections = []
         for session_id, connections in list(self.active_sessions.items()):
-            dead_sockets = []
             for connection in list(connections):
-                success = await self._safe_send_json(connection, data)
-                if not success:
-                    dead_sockets.append(connection)
-            for dead in dead_sockets:
-                self.disconnect(dead, session_id)
+                tasks.append(self._safe_send_json(connection, data))
+                target_connections.append((session_id, connection))
+
+        if tasks:
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            for (session_id, connection), success in zip(target_connections, results):
+                if success is not True:
+                    self.disconnect(connection, session_id)
 
     def broadcast_all_sync(self, data: dict):
         """Safely broadcast from synchronous code or background worker threads."""

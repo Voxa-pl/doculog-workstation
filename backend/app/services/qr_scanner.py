@@ -65,6 +65,46 @@ class GIBQRScanner:
                     high_contrast = enhancer.enhance(2.0)
                     decoded_objects = decode(high_contrast)
 
+            # 4. Aşama: Titreme, Odak Kaybı veya Eğim İçin Unsharp Masking ve OpenCV Çift Motorlu Tarama
+            if not decoded_objects:
+                try:
+                    import cv2
+                    import numpy as np
+                    cv_img = np.array(img)
+                    if len(cv_img.shape) == 3 and cv_img.shape[2] == 3:
+                        cv_gray = cv2.cvtColor(cv_img, cv2.COLOR_RGB2GRAY)
+                    else:
+                        cv_gray = cv_img
+
+                    # 4.1: Unsharp Masking ile Titreme / Bulanıklık Giderme
+                    blurred = cv2.GaussianBlur(cv_gray, (0, 0), 3)
+                    unsharp = cv2.addWeighted(cv_gray, 1.8, blurred, -0.8, 0)
+                    decoded_objects = decode(Image.fromarray(unsharp))
+
+                    # 4.2: OpenCV QRCodeDetector Fallback (Pyzbar eğikliği kaçırırsa devreye girer)
+                    detector = cv2.QRCodeDetector()
+                    if not decoded_objects:
+                        data, bbox, _ = detector.detectAndDecode(cv_gray)
+                        if data and data.strip():
+                            parsed_qr = cls.parse_gib_qr_text(data.strip(), barcode_type="QRCODE")
+                            return [parsed_qr]
+
+                    # 4.3: GİB Sağ Üst Çeyrek (ROI Zoom - 2x) Taraması (VUK 509 standardı sağ üst köşe)
+                    if not decoded_objects:
+                        h, w = cv_gray.shape[:2]
+                        # Sağ üst %35 genişlik ve %32 yükseklik alanı
+                        roi = cv_gray[0:int(h * 0.32), int(w * 0.65):w]
+                        if roi.size > 0:
+                            roi_zoomed = cv2.resize(roi, (0, 0), fx=2.0, fy=2.0, interpolation=cv2.INTER_CUBIC)
+                            decoded_objects = decode(Image.fromarray(roi_zoomed))
+                            if not decoded_objects:
+                                data_roi, _, _ = detector.detectAndDecode(roi_zoomed)
+                                if data_roi and data_roi.strip():
+                                    parsed_qr = cls.parse_gib_qr_text(data_roi.strip(), barcode_type="QRCODE")
+                                    return [parsed_qr]
+                except Exception as cv_err:
+                    logger.debug(f"Gelişmiş optik QR kurtarma adımı istisnası: {cv_err}")
+
             results: List[GIBQRCodeData] = []
             for obj in decoded_objects:
                 raw_bytes = obj.data

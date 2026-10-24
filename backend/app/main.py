@@ -34,6 +34,22 @@ import time
 @app.on_event("startup")
 async def startup_event():
     ws_manager.get_or_set_loop()
+    # Zombi Evrak Temizliği: Sunucu yeniden başladığında 'isleniyor' durumunda kilitli kalan evrakları kurtar
+    try:
+        from .services.document_repo import doc_repo
+        from .models.irsaliye import ProcessingStatus
+        docs = doc_repo.get_all()
+        stale_count = 0
+        for d in docs:
+            if d.durum == ProcessingStatus.ISLENIYOR:
+                d.durum = ProcessingStatus.HATA
+                d.hata_mesaji = "Sunucu yeniden başlatıldığı için işlem yarıda kaldı. Lütfen tekrar deneyin."
+                doc_repo.save(d)
+                stale_count += 1
+        if stale_count > 0:
+            print(f"[Startup Stale Cleaner] {stale_count} adet zombi evrak kurtarıldı.")
+    except Exception as stale_err:
+        print(f"[Startup Stale Cleaner Hata]: {stale_err}")
 
 @app.websocket("/ws")
 @app.websocket("/ws/{session_id}")

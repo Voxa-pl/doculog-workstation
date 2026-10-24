@@ -118,9 +118,17 @@ export const App: React.FC = () => {
     }
   }, []);
 
+  const wsDebounceTimerRef = useRef<number | null>(null);
+
   const { isConnected: isWsConnected } = useLiveSync({
     onDocumentsUpdated: useCallback((payload: any) => {
-      fetchDocuments();
+      // 300ms trailing debounce: Toplu işlem fırtınasında tarayıcı ve sunucu yükünü dengeler
+      if (wsDebounceTimerRef.current) {
+        clearTimeout(wsDebounceTimerRef.current);
+      }
+      wsDebounceTimerRef.current = window.setTimeout(() => {
+        fetchDocuments();
+      }, 300);
     }, [fetchDocuments]),
     onDocumentUploaded: useCallback((doc: DocumentItem) => {
       // Aktif olarak form üzerinde düzenleme yapılıyorsa odak bozulmasın

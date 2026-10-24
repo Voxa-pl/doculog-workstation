@@ -149,18 +149,65 @@ class ImageProcessor:
             if 0.5 < abs(angle) < 35.0:
                 center = (w // 2, h // 2)
                 M = cv2.getRotationMatrix2D(center, angle, 1.0)
-                rotated = cv2.warpAffine(img, M, (w, h), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REPLICATE)
+                # Dış sınırları genişleterek sağ üstteki GİB karekodunun ve metin köşelerinin kesilmesini önle
+                cos = np.abs(M[0, 0])
+                sin = np.abs(M[0, 1])
+                new_w = int((h * sin) + (w * cos))
+                new_h = int((h * cos) + (w * sin))
+                M[0, 2] += (new_w / 2) - center[0]
+                M[1, 2] += (new_h / 2) - center[1]
+                rotated = cv2.warpAffine(
+                    img,
+                    M,
+                    (new_w, new_h),
+                    flags=cv2.INTER_CUBIC,
+                    borderMode=cv2.BORDER_CONSTANT,
+                    borderValue=(255, 255, 255)
+                )
                 cv2.imwrite(str(target), rotated)
                 return True, target, {
                     "method": "DESKEW_AFFINE_ROTATION",
                     "corrected_angle": round(float(angle), 2),
-                    "original_dimensions": [w, h]
+                    "original_dimensions": [w, h],
+                    "rectified_dimensions": [new_w, new_h]
                 }
 
         return False, target, {
             "method": "NO_CORRECTION_NEEDED",
             "message": "Görsel perspektifi dengeli."
         }
+
+    @staticmethod
+    def optimize_image_for_gemini(image_path: Path, max_dimension: int = 2560, quality: int = 88) -> Path:
+        """
+        Gemini Multimodal API için 12-48MP ham akıllı telefon veya taranmış evrak görsellerini
+        optik netlik kaybı yaşatmadan (uzun kenar maks 2560px) optimize eder.
+        Base64 şişmesini, ağ gecikmesini ve sunucu bellek tüketimini (OOM) %90+ oranında düşürür.
+        """
+        try:
+            with Image.open(image_path) as img:
+                img = ImageProcessor.fix_exif_orientation(img)
+                w, h = img.size
+                if max(w, h) > max_dimension:
+                    if w > h:
+                        new_w = max_dimension
+                        new_h = int(h * (max_dimension / w))
+                    else:
+                        new_h = max_dimension
+                        new_w = int(w * (max_dimension / h))
+                    img = img.resize((new_w, new_h), Image.Resampling.LANCZOS)
+
+                if img.mode in ("RGBA", "P"):
+                    img = img.convert("RGB")
+
+                opt_dir = image_path.parent / "opt"
+                opt_dir.mkdir(parents=True, exist_ok=True)
+                opt_path = opt_dir / f"opt_{image_path.name}"
+                img.save(opt_path, "JPEG", quality=quality, optimize=True)
+                return opt_path
+        except Exception as e:
+            logger.warning(f"Görsel optimize edilemedi ({image_path}), orijinal kullanılıyor: {e}")
+            return image_path
 
 image_processor = ImageProcessor()
 

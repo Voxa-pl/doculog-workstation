@@ -78,8 +78,19 @@ class QueueManager:
                 last_doc: Optional[DocumentItem] = None
 
                 for attempt in range(max_retries + 1):
-                    # Senkron AI çıkarma işlemini executor'da çalıştır
-                    await loop.run_in_executor(None, extractor_func, doc_id)
+                    # Senkron AI çıkarma işlemini executor'da 75 saniye zaman aşımı garantisiyle çalıştır
+                    try:
+                        await asyncio.wait_for(
+                            loop.run_in_executor(None, extractor_func, doc_id),
+                            timeout=75.0
+                        )
+                    except asyncio.TimeoutError:
+                        logger.error(f"[QueueManager TIMEOUT] Belge {doc_id} 75 saniye içinde yanıt vermedi, zaman aşımına uğratıldı.")
+                        timed_out_doc = doc_repo.get_by_id(doc_id)
+                        if timed_out_doc:
+                            timed_out_doc.durum = ProcessingStatus.HATA
+                            timed_out_doc.hata_mesaji = "Zaman Aşımı: İşlem 75 saniye içinde tamamlanamadı."
+                            doc_repo.save(timed_out_doc)
                     last_doc = doc_repo.get_by_id(doc_id)
 
                     # 429 Rate Limit kontrolü ve exponential backoff
