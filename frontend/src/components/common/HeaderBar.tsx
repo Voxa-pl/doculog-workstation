@@ -16,7 +16,8 @@ import {
   QrCode,
   Menu,
   X,
-  HardDriveDownload
+  HardDriveDownload,
+  Key
 } from 'lucide-react';
 import { BatchSummary, ApiKeyStatus, AppTheme, AppView } from '../../types/irsaliye';
 import { documentApi, systemApi } from '../../services/api';
@@ -38,6 +39,8 @@ interface HeaderBarProps {
 
 export const HeaderBar: React.FC<HeaderBarProps> = ({
   summary,
+  apiKeyStatus,
+  onOpenApiKeyModal,
   onOpenQrBridgeModal,
   onProcessAll,
   onClearAll,
@@ -260,6 +263,18 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
           </button>
         )}
 
+        {/* API Anahtarı Yönetimi */}
+        <button
+          type="button"
+          onClick={onOpenApiKeyModal}
+          className="hidden md:flex items-center space-x-1.5 bg-theme-card hover:bg-theme-card-hover text-theme-secondary hover:text-theme-primary px-2.5 py-1.5 rounded-lg text-xs font-medium border border-theme-subtle shadow-sm transition-all shrink-0"
+          title="Google Gemini API Anahtarı Ayarları"
+        >
+          <Key className="w-3.5 h-3.5 text-amber-400" />
+          <span className="hidden xl:inline">API Key</span>
+          <span className={`w-1.5 h-1.5 rounded-full ${apiKeyStatus?.is_configured ? 'bg-emerald-400' : 'bg-amber-400 animate-pulse'}`} />
+        </button>
+
         {/* Tema Seçici Dropdown */}
         <div className="relative hidden md:block" ref={themeRef}>
           <button
@@ -337,6 +352,22 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
               <FileSpreadsheet className="w-4 h-4" />
               <span>Toplu Excel İndir (.xlsx)</span>
             </a>
+
+            <button
+              onClick={() => {
+                onOpenApiKeyModal();
+                setIsMobileMenuOpen(false);
+              }}
+              className="flex items-center justify-between w-full p-2 rounded-lg bg-theme-card text-theme-primary text-xs font-medium border border-theme-subtle"
+            >
+              <span className="flex items-center gap-2">
+                <Key className="w-4 h-4 text-amber-400" />
+                <span>API Anahtarı Ayarları</span>
+              </span>
+              <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${apiKeyStatus?.is_configured ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'}`}>
+                {apiKeyStatus?.is_configured ? 'Tanımlı' : 'Eksik'}
+              </span>
+            </button>
 
             <button
               onClick={() => {

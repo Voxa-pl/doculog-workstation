@@ -78,9 +78,12 @@ export const QueueItem: React.FC<QueueItemProps> = ({
         );
       case 'hata':
         return (
-          <span className="flex items-center space-x-1 text-[10px] text-rose-400 bg-rose-500/10 border border-rose-500/20 px-1.5 py-0.5 rounded font-medium shrink-0 state-morph-badge">
-            <AlertCircle className="w-3 h-3" />
-            <span>Hata</span>
+          <span 
+            className="flex items-center space-x-1 text-[10px] text-rose-400 bg-rose-500/10 border border-rose-500/20 px-1.5 py-0.5 rounded font-medium shrink-0 state-morph-badge cursor-help"
+            title={doc.hata_mesaji || 'Belge ayrıştırılırken hata oluştu'}
+          >
+            <AlertCircle className="w-3 h-3 shrink-0" />
+            <span className="truncate max-w-[80px]">Hata</span>
           </span>
         );
       default:
@@ -169,11 +172,11 @@ export const QueueItem: React.FC<QueueItemProps> = ({
               <button
                 type="button"
                 onClick={onDelete}
-                className="opacity-80 sm:opacity-0 sm:group-hover:opacity-100 text-theme-muted hover:text-rose-400 min-w-[34px] min-h-[34px] flex items-center justify-center p-1 rounded-md shrink-0 tactile-icon"
+                className="text-theme-muted/40 hover:text-rose-400 min-w-[30px] min-h-[30px] flex items-center justify-center p-1 rounded-md shrink-0 tactile-icon transition-colors"
                 title="Kuyruktan Sil"
                 aria-label="Kuyruktan Sil"
               >
-                <Trash2 className="w-4 h-4" />
+                <Trash2 className="w-3.5 h-3.5" />
               </button>
             </div>
 
@@ -196,6 +199,18 @@ export const QueueItem: React.FC<QueueItemProps> = ({
                 className="text-[11px] bg-blue-600/20 hover:bg-blue-600 border border-blue-500/30 text-blue-300 hover:text-white px-2.5 py-1 min-h-[30px] rounded-md font-semibold shrink-0 flex items-center justify-center tactile-btn"
               >
                 İşle
+              </button>
+            )}
+
+            {doc.durum === 'hata' && (
+              <button
+                type="button"
+                onClick={onProcess}
+                className="text-[10px] bg-rose-500/15 hover:bg-rose-500/30 border border-rose-500/30 text-rose-300 hover:text-white px-2 py-0.5 min-h-[26px] rounded-md font-semibold shrink-0 flex items-center gap-1 transition-all"
+                title="Ayrıştırmayı Yeniden Dene"
+              >
+                <RotateCw className="w-3 h-3" />
+                <span>Tekrar Dene</span>
               </button>
             )}
 

@@ -37,6 +37,7 @@ import {
   MoreHorizontal
 } from 'lucide-react';
 import { documentApi } from '../../services/api';
+import { parseTurkishNumber, formatTurkishNumber } from '../../utils/number';
 
 // Web Audio API Low-Frequency Haptic Pulse
 const playCadenceHaptic = () => {
@@ -66,6 +67,7 @@ interface DocumentEditorProps {
   onProcessDocument: (id: string) => void;
   onSelectNextDoc?: () => void;
   onDeleteDoc?: (id: string) => void;
+  onDirtyChange?: (isDirty: boolean) => void;
   isProcessing: boolean;
 }
 
@@ -75,6 +77,7 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
   onProcessDocument,
   onSelectNextDoc,
   onDeleteDoc,
+  onDirtyChange,
   isProcessing,
 }) => {
   const [formData, setFormData] = useState<IrsaliyeData | null>(null);
@@ -108,6 +111,14 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
   const cadenceTimerRef = useRef<number | null>(null);
   const cadenceWarningRef = useRef(false);
 
+  const currentDocIdRef = useRef<string | null>(document?.id || null);
+  const hasUnsavedChangesRef = useRef(false);
+  hasUnsavedChangesRef.current = hasUnsavedChanges;
+
+  useEffect(() => {
+    onDirtyChange?.(hasUnsavedChanges);
+  }, [hasUnsavedChanges, onDirtyChange]);
+
   // Clean up timers on unmount
   useEffect(() => {
     return () => {
@@ -118,12 +129,16 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
   }, []);
 
   useEffect(() => {
-    if (document?.veri) {
-      setFormData(JSON.parse(JSON.stringify(document.veri)));
+    const isNewDoc = document?.id !== currentDocIdRef.current;
+    if (isNewDoc) {
+      currentDocIdRef.current = document?.id || null;
+      setFormData(document?.veri ? JSON.parse(JSON.stringify(document.veri)) : null);
       setHasUnsavedChanges(false);
     } else {
-      setFormData(null);
-      setHasUnsavedChanges(false);
+      // Arka plan WebSocket veya liste senkronizasyonunda kullanıcının formu ezilmesin (Dirty-State Guard)
+      if (!hasUnsavedChangesRef.current) {
+        setFormData(document?.veri ? JSON.parse(JSON.stringify(document.veri)) : null);
+      }
     }
   }, [document?.id, document?.veri]);
 
@@ -167,10 +182,18 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
     }
   }, [formData]);
 
-  // F2 Kısayolu ile Şüpheli Alana Atlama
+  // F2 Kısayolu ile Şüpheli Alana Atlama (Sadece Görünür Elemanları Hedefler)
   const jumpToNextSuspicious = () => {
-    const suspiciousInputs = Array.from(window.document.querySelectorAll<HTMLInputElement>('[data-suspicious="true"]'));
-    if (suspiciousInputs.length === 0) return;
+    const suspiciousInputs = Array.from(window.document.querySelectorAll<HTMLInputElement>('[data-suspicious="true"]'))
+      .filter((el) => el.offsetParent !== null);
+
+    if (suspiciousInputs.length === 0) {
+      const allSuspicious = Array.from(window.document.querySelectorAll<HTMLInputElement>('[data-suspicious="true"]'));
+      if (allSuspicious.length > 0 && activeTab !== 'all') {
+        setActiveTab('all');
+      }
+      return;
+    }
 
     const currentIndex = suspiciousInputs.findIndex(
       (el) => el === window.document.activeElement
@@ -196,6 +219,19 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      const isAnyModalOpen = isExportMenuOpen || isMobileActionSheetOpen || isPoModalOpen || isUetdsModalOpen || isErpModalOpen;
+      if (isAnyModalOpen) {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          setIsExportMenuOpen(false);
+          setIsMobileActionSheetOpen(false);
+          setIsPoModalOpen(false);
+          setIsUetdsModalOpen(false);
+          setIsErpModalOpen(false);
+        }
+        return; // Modal açıkken arkadaki kısayolları engelle
+      }
+
       // Input veya textarea içindeyse bazı kısayolları engelle
       const isInputActive =
         (e.target as HTMLElement).tagName === 'INPUT' ||
@@ -224,13 +260,13 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
         jumpToNextSuspicious();
       } else if (e.key === 'Enter' && e.ctrlKey && !isNonInvoice) {
         e.preventDefault();
-        handleApproveAndNext();
+        handleApproveAndNext(false);
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [formData, document, activeTab, isNonInvoice, onDeleteDoc]);
+  }, [formData, document, activeTab, isNonInvoice, onDeleteDoc, isExportMenuOpen, isMobileActionSheetOpen, isPoModalOpen, isUetdsModalOpen, isErpModalOpen, cadenceWarning]);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -337,42 +373,27 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
 
   const totalCalculatedQty = (formData.kalemler || []).reduce(
     (sum, k) => {
-      const v = Number(k?.miktar);
-      return sum + (Number.isFinite(v) ? v : 0);
+      const v = parseTurkishNumber(k?.miktar);
+      return sum + (v !== null ? v : 0);
     },
     0
   );
 
-  const parsedDocTotalQty = (() => {
-    if (!formData?.genel_toplam_miktar) return null;
-    const cleaned = String(formData.genel_toplam_miktar).replace(/\./g, '').replace(',', '.').trim();
-    const val = parseFloat(cleaned);
-    return Number.isFinite(val) && val > 0 ? val : null;
-  })();
+  const parsedDocTotalQty = parseTurkishNumber(formData?.genel_toplam_miktar);
 
   const isMathMatch = parsedDocTotalQty !== null && Math.abs(totalCalculatedQty - parsedDocTotalQty) < 0.05;
   const isMathDiscrepancy = parsedDocTotalQty !== null && !isMathMatch;
 
   const handleApproveAndNext = async (force: boolean = false) => {
-    // Cadence Braking (Ritmik Frenleme):
-    // Matematiksel uyuşmazlık durumunda ilk onay denemesinde mikro-direnç göster
-    if (!force && isMathDiscrepancy && !cadenceWarningRef.current) {
-      playCadenceHaptic();
+    // Miktar uyuşmazlığı varsa görsel uyarı rozetini aç, ancak force veya ikinci tıklamada gecikmesiz onayla
+    if (!force && isMathDiscrepancy && !cadenceWarning) {
       if (typeof navigator !== 'undefined' && navigator.vibrate) {
-        navigator.vibrate([40, 60, 40]);
+        navigator.vibrate([30, 40]);
       }
-      cadenceWarningRef.current = true;
       setCadenceWarning(true);
-      if (cadenceTimerRef.current) clearTimeout(cadenceTimerRef.current);
-      cadenceTimerRef.current = window.setTimeout(() => {
-        cadenceWarningRef.current = false;
-        setCadenceWarning(false);
-      }, 3500);
       return;
     }
 
-    if (cadenceTimerRef.current) clearTimeout(cadenceTimerRef.current);
-    cadenceWarningRef.current = false;
     setCadenceWarning(false);
     await handleSaveChanges('onaylandi');
     if (onSelectNextDoc) {
@@ -384,7 +405,6 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
     if (typeof navigator !== 'undefined' && navigator.vibrate) {
       navigator.vibrate(18);
     }
-    playCadenceHaptic();
     handleApproveAndNext(cadenceWarning);
   };
 

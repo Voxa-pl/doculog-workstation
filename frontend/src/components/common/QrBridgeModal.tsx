@@ -63,11 +63,19 @@ export const QrBridgeModal: React.FC<QrBridgeModalProps> = ({
   };
 
   useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen) {
+        e.preventDefault();
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+
     if (!isOpen) {
       cleanupSocketAndTimers();
       setIsSuccess(false);
       setQrInfo(null);
-      return;
+      return () => window.removeEventListener('keydown', handleKeyDown);
     }
 
     let isSubscribed = true;
@@ -137,6 +145,7 @@ export const QrBridgeModal: React.FC<QrBridgeModalProps> = ({
     initBridge();
 
     return () => {
+      window.removeEventListener('keydown', handleKeyDown);
       isSubscribed = false;
       cleanupSocketAndTimers();
     };
@@ -153,27 +162,32 @@ export const QrBridgeModal: React.FC<QrBridgeModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 select-none">
+    <div 
+      className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 select-none animate-in fade-in duration-150"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
       <div 
-        className="bg-slate-900 border border-slate-800 rounded-2xl max-w-sm w-full shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150 min-w-0"
+        className="bg-theme-surface border border-theme-subtle rounded-2xl max-w-sm w-full shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150 min-w-0"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Üst Başlık */}
-        <div className="p-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/40 min-w-0">
+        <div className="p-4 border-b border-theme-subtle flex items-center justify-between bg-theme-surface min-w-0">
           <div className="flex items-center space-x-2.5 min-w-0">
             <div className="w-8 h-8 rounded-lg bg-blue-600/20 text-blue-400 border border-blue-500/30 flex items-center justify-center shrink-0">
               <Smartphone className="w-4 h-4" />
             </div>
             <div className="min-w-0">
-              <h3 className="text-xs font-semibold text-white tracking-wide truncate">
+              <h3 className="text-xs font-semibold text-theme-primary tracking-wide truncate">
                 Telefondan Canlı Yükleme
               </h3>
-              <p className="text-[10px] text-slate-400 truncate">Mobile QR Bridge</p>
+              <p className="text-[10px] text-theme-muted truncate">Mobile QR Bridge</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="text-slate-400 hover:text-white p-1 rounded-md hover:bg-slate-800 transition-colors shrink-0"
+            className="text-theme-muted hover:text-theme-primary p-1.5 rounded-lg hover:bg-theme-card transition-colors shrink-0"
           >
             <X className="w-4 h-4" />
           </button>
@@ -184,14 +198,14 @@ export const QrBridgeModal: React.FC<QrBridgeModalProps> = ({
           {isLoading ? (
             <div className="py-12 flex flex-col items-center justify-center space-y-3">
               <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
-              <p className="text-xs text-slate-400">QR Kod ve Yerel Ağ Köprüsü Hazırlanıyor...</p>
+              <p className="text-xs text-theme-muted">QR Kod ve Yerel Ağ Köprüsü Hazırlanıyor...</p>
             </div>
           ) : error ? (
-            <div className="py-8 flex flex-col items-center justify-center space-y-2 text-red-400">
+            <div className="py-8 flex flex-col items-center justify-center space-y-2 text-rose-400">
               <p className="text-xs font-medium">{error}</p>
               <button
                 onClick={onClose}
-                className="mt-3 px-3 py-1.5 bg-slate-800 text-xs text-slate-200 rounded-md hover:bg-slate-700"
+                className="mt-3 px-3 py-1.5 bg-theme-card text-xs text-theme-primary rounded-lg hover:bg-theme-card-hover border border-theme-subtle"
               >
                 Kapat
               </button>
@@ -201,8 +215,8 @@ export const QrBridgeModal: React.FC<QrBridgeModalProps> = ({
               <div className="w-16 h-16 rounded-full bg-emerald-500/20 border-2 border-emerald-500 flex items-center justify-center text-emerald-400 shadow-lg shadow-emerald-500/20">
                 <CheckCircle2 className="w-8 h-8" />
               </div>
-              <h4 className="text-sm font-bold text-white">İrsaliye Başarıyla Aktarıldı!</h4>
-              <p className="text-xs text-slate-300 max-w-xs break-words">
+              <h4 className="text-sm font-bold text-theme-primary">İrsaliye Başarıyla Aktarıldı!</h4>
+              <p className="text-xs text-theme-secondary max-w-xs break-words">
                 <span className="text-emerald-400 font-semibold">{receivedDocName}</span> ayrıştırma masasına aktarıldı.
               </p>
             </div>
@@ -215,7 +229,7 @@ export const QrBridgeModal: React.FC<QrBridgeModalProps> = ({
               </div>
 
               {/* QR Kod Kartı */}
-              <div className="bg-white p-3 rounded-xl shadow-xl border-4 border-slate-800 my-1">
+              <div className="bg-white p-3 rounded-xl shadow-xl border-4 border-theme-subtle my-1">
                 {qrInfo?.qr_data_url ? (
                   <img
                     src={qrInfo.qr_data_url}
@@ -230,16 +244,16 @@ export const QrBridgeModal: React.FC<QrBridgeModalProps> = ({
               </div>
 
               {/* URL ve Kopyala Butonu */}
-              <div className="w-full mt-3 bg-slate-950 border border-slate-800 rounded-lg p-2 flex items-center justify-between text-left min-w-0">
+              <div className="w-full mt-3 bg-theme-card border border-theme-subtle rounded-xl p-2 flex items-center justify-between text-left min-w-0">
                 <div className="truncate mr-2 min-w-0 flex-1">
-                  <div className="text-[10px] text-slate-500 font-medium uppercase truncate">Yerel Ağ Adresi (LAN)</div>
-                  <div className="text-xs font-mono text-slate-300 truncate" title={qrInfo?.mobile_url || ''}>
+                  <div className="text-[10px] text-theme-muted font-medium uppercase truncate">Yerel Ağ Adresi (LAN)</div>
+                  <div className="text-xs font-mono text-theme-secondary truncate" title={qrInfo?.mobile_url || ''}>
                     {qrInfo?.mobile_url}
                   </div>
                 </div>
                 <button
                   onClick={handleCopyLink}
-                  className="flex items-center space-x-1 bg-slate-800 hover:bg-slate-700 text-slate-200 px-2 py-1 rounded text-[11px] font-medium shrink-0 transition-colors"
+                  className="flex items-center space-x-1 bg-theme-surface hover:bg-theme-card-hover text-theme-primary border border-theme-subtle px-2.5 py-1 rounded-md text-[11px] font-medium shrink-0 transition-colors"
                   title="Bağlantıyı Kopyala"
                 >
                   {isCopied ? (
@@ -249,7 +263,7 @@ export const QrBridgeModal: React.FC<QrBridgeModalProps> = ({
                     </>
                   ) : (
                     <>
-                      <Copy className="w-3.5 h-3.5 text-slate-400" />
+                      <Copy className="w-3.5 h-3.5 text-blue-400" />
                       <span>Kopyala</span>
                     </>
                   )}
@@ -257,17 +271,17 @@ export const QrBridgeModal: React.FC<QrBridgeModalProps> = ({
               </div>
 
               {/* Kullanım İpuçları */}
-              <div className="w-full mt-3.5 pt-3 border-t border-slate-800/80 text-[11px] text-slate-400 text-left space-y-1.5">
+              <div className="w-full mt-3.5 pt-3 border-t border-theme-subtle text-[11px] text-theme-muted text-left space-y-1.5">
                 <div className="flex items-start space-x-1.5">
-                  <span className="w-4 h-4 rounded-full bg-slate-800 text-slate-300 flex items-center justify-center text-[10px] shrink-0 font-bold mt-0.5">1</span>
+                  <span className="w-4 h-4 rounded-full bg-theme-card text-theme-primary flex items-center justify-center text-[10px] shrink-0 font-bold mt-0.5 border border-theme-subtle">1</span>
                   <span>Telefon kameranızı QR koda doğrultun ve açın.</span>
                 </div>
                 <div className="flex items-start space-x-1.5">
-                  <span className="w-4 h-4 rounded-full bg-slate-800 text-slate-300 flex items-center justify-center text-[10px] shrink-0 font-bold mt-0.5">2</span>
+                  <span className="w-4 h-4 rounded-full bg-theme-card text-theme-primary flex items-center justify-center text-[10px] shrink-0 font-bold mt-0.5 border border-theme-subtle">2</span>
                   <span>Açılan sayfada irsaliyenin fotoğrafını çekin.</span>
                 </div>
                 <div className="flex items-start space-x-1.5">
-                  <span className="w-4 h-4 rounded-full bg-slate-800 text-slate-300 flex items-center justify-center text-[10px] shrink-0 font-bold mt-0.5">3</span>
+                  <span className="w-4 h-4 rounded-full bg-theme-card text-theme-primary flex items-center justify-center text-[10px] shrink-0 font-bold mt-0.5 border border-theme-subtle">3</span>
                   <span><strong>'Sisteme Aktar'</strong>a bastığınızda belge doğrudan buraya düşer.</span>
                 </div>
               </div>
@@ -276,12 +290,12 @@ export const QrBridgeModal: React.FC<QrBridgeModalProps> = ({
         </div>
 
         {/* Alt Bilgi */}
-        <div className="px-5 py-2.5 bg-slate-950/60 border-t border-slate-800/80 flex items-center justify-between text-[10px] text-slate-500 min-w-0">
+        <div className="px-5 py-2.5 bg-theme-card border-t border-theme-subtle flex items-center justify-between text-[10px] text-theme-muted min-w-0">
           <div className="flex items-center space-x-1 truncate min-w-0">
-            <Wifi className="w-3 h-3 text-slate-400 shrink-0" />
+            <Wifi className="w-3 h-3 text-emerald-400 shrink-0" />
             <span className="truncate">Aynı Wi-Fi ağına bağlı olmalıdır</span>
           </div>
-          <span className="shrink-0 font-mono">IP: {qrInfo?.lan_ip || '...'}</span>
+          <span className="shrink-0 font-mono text-theme-secondary">IP: {qrInfo?.lan_ip || '...'}</span>
         </div>
       </div>
     </div>

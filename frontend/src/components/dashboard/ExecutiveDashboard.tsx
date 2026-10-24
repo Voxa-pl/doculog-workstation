@@ -58,12 +58,25 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
 
   // In-memory fallback calculation to guarantee 100% reliability if backend is starting
   const computeLocalMetrics = useCallback((): DashboardMetrics => {
-    const totalVolume = safeDocs.length;
-    const completed = safeDocs.filter((d) => d.durum === 'tamamlandi').length;
-    const approved = safeDocs.filter((d) => d.durum === 'onaylandi').length;
-    const queued = safeDocs.filter((d) => d.durum === 'kuyrukta').length;
-    const inProgress = safeDocs.filter((d) => d.durum === 'isleniyor').length;
-    const failed = safeDocs.filter((d) => d.durum === 'hata').length;
+    const now = Date.now();
+    const filteredDocsByTime = safeDocs.filter((doc) => {
+      if (timeFilter === 'all') return true;
+      const docTime = doc.guncellenme_ts ? doc.guncellenme_ts * (doc.guncellenme_ts < 1e12 ? 1000 : 1) : null;
+      if (!docTime) return true;
+      const diffDays = (now - docTime) / (1000 * 60 * 60 * 24);
+      if (timeFilter === 'today') return diffDays <= 1;
+      if (timeFilter === '7days') return diffDays <= 7;
+      if (timeFilter === '30days') return diffDays <= 30;
+      return true;
+    });
+
+    const targetDocs = filteredDocsByTime;
+    const totalVolume = targetDocs.length;
+    const completed = targetDocs.filter((d) => d.durum === 'tamamlandi').length;
+    const approved = targetDocs.filter((d) => d.durum === 'onaylandi').length;
+    const queued = targetDocs.filter((d) => d.durum === 'kuyrukta').length;
+    const inProgress = targetDocs.filter((d) => d.durum === 'isleniyor').length;
+    const failed = targetDocs.filter((d) => d.durum === 'hata').length;
 
     const approvalDenominator = approved + completed + failed;
     const rawApprovalRate = approvalDenominator > 0 ? (approved / approvalDenominator) * 100 : 0;
@@ -76,7 +89,7 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
     const dateMap: Record<string, { evrak: number; onay: number; qty: number; lines: number }> = {};
     let discrepancyCount = 0;
 
-    safeDocs.forEach((doc) => {
+    targetDocs.forEach((doc) => {
       const data = doc.veri;
       const date = data?.header?.sevk_tarihi || data?.header?.duzenleme_tarihi || 'Bugün';
       const supplier = data?.header?.gonderici_unvan || 'Bilinmeyen Tedarikçi';
@@ -188,7 +201,7 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
       empty: totalVolume === 0,
       son_guncelleme: new Date().toLocaleTimeString('tr-TR'),
     };
-  }, [safeDocs]);
+  }, [safeDocs, timeFilter]);
 
   const loadMetrics = useCallback(async () => {
     setIsLoading(true);
@@ -230,7 +243,7 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
     }
   };
 
-  const activeMetrics = metrics || computeLocalMetrics();
+  const activeMetrics = (timeFilter === 'all' && metrics) ? metrics : computeLocalMetrics();
 
   // Filtered documents for summary table
   const filteredDocs = safeDocs.filter((doc) => {

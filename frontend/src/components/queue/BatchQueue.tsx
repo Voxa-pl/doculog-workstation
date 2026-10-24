@@ -237,7 +237,7 @@ export const BatchQueue: React.FC<BatchQueueProps> = ({
           </button>
         )}
 
-        {safeDocs.length > 3 && (
+        {safeDocs.length > 0 && (
           <div className="space-y-1.5 min-w-0">
             <div className="relative min-w-0">
               <Search className="w-4 h-4 text-theme-muted absolute left-2.5 top-1/2 -translate-y-1/2" />

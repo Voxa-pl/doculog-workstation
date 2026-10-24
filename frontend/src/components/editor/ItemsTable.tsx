@@ -1,6 +1,7 @@
 import React from 'react';
 import { LineItem } from '../../types/irsaliye';
-import { Plus, Minus, Trash2, Package, Layers } from 'lucide-react';
+import { Plus, Minus, Trash2, Package } from 'lucide-react';
+import { parseTurkishNumber, formatTurkishNumber } from '../../utils/number';
 
 interface ItemsTableProps {
   items?: LineItem[] | null;
@@ -38,8 +39,8 @@ export const ItemsTable: React.FC<ItemsTableProps> = ({ items, onChange }) => {
   const handleStepQuantity = (index: number, delta: number) => {
     const item = safeItems[index];
     if (!item) return;
-    const current = Number(item.miktar);
-    const validCurrent = Number.isFinite(current) ? current : 0;
+    const current = parseTurkishNumber(item.miktar);
+    const validCurrent = current !== null ? current : 0;
     const nextVal = Math.max(0, Math.round((validCurrent + delta) * 100) / 100);
     handleItemChange(index, 'miktar', nextVal);
   };
@@ -64,8 +65,8 @@ export const ItemsTable: React.FC<ItemsTableProps> = ({ items, onChange }) => {
   };
 
   const totalQuantity = safeItems.reduce((sum, item) => {
-    const val = Number(item?.miktar);
-    return sum + (Number.isFinite(val) ? val : 0);
+    const val = parseTurkishNumber(item?.miktar);
+    return sum + (val !== null ? val : 0);
   }, 0);
 
   return (
@@ -103,8 +104,8 @@ export const ItemsTable: React.FC<ItemsTableProps> = ({ items, onChange }) => {
           </div>
         ) : (
           safeItems.map((item, index) => {
-            const qtyNum = Number(item.miktar);
-            const isSuspicious = !item.mal_hizmet || !Number.isFinite(qtyNum) || qtyNum <= 0;
+            const qtyNum = parseTurkishNumber(item.miktar);
+            const isSuspicious = !item.mal_hizmet || qtyNum === null || qtyNum <= 0;
 
             return (
               <div
@@ -155,28 +156,18 @@ export const ItemsTable: React.FC<ItemsTableProps> = ({ items, onChange }) => {
                       <Minus className="w-3 h-3" />
                     </button>
 
-                    {/* Miktar Girişi */}
+                    {/* Miktar Girişi (Virgül ve Nokta Uyumlu) */}
                     <input
-                      type="number"
-                      step="any"
-                      value={
-                        item.miktar !== null &&
-                        item.miktar !== undefined &&
-                        Number.isFinite(Number(item.miktar))
-                          ? item.miktar
-                          : ''
-                      }
+                      type="text"
+                      inputMode="decimal"
+                      value={item.miktar !== null && item.miktar !== undefined ? String(item.miktar) : ''}
                       onChange={(e) => {
                         const val = e.target.value.trim();
                         if (val === '') {
                           handleItemChange(index, 'miktar', null);
                         } else {
-                          const parsed = parseFloat(val);
-                          handleItemChange(
-                            index,
-                            'miktar',
-                            Number.isFinite(parsed) ? parsed : null
-                          );
+                          const parsed = parseTurkishNumber(val);
+                          handleItemChange(index, 'miktar', parsed !== null ? parsed : val);
                         }
                       }}
                       placeholder="0"
@@ -208,7 +199,7 @@ export const ItemsTable: React.FC<ItemsTableProps> = ({ items, onChange }) => {
                   </div>
                 </div>
 
-                {/* Notlar / Lot Girişi (Varsa veya eklemek istenirse) */}
+                {/* Notlar / Lot Girişi */}
                 <div className="pt-0.5">
                   <input
                     type="text"
@@ -229,9 +220,7 @@ export const ItemsTable: React.FC<ItemsTableProps> = ({ items, onChange }) => {
             <span className="text-theme-muted font-medium">Toplam Kalem Miktarı:</span>
             <div className="flex items-center space-x-1.5">
               <span className="font-mono text-sm text-blue-400 font-bold tabular-nums">
-                {Number.isFinite(totalQuantity)
-                  ? totalQuantity.toLocaleString('tr-TR', { maximumFractionDigits: 2 })
-                  : '0'}
+                {formatTurkishNumber(totalQuantity)}
               </span>
               <span className="text-theme-muted text-[11px]">Birim Toplam</span>
             </div>
@@ -282,13 +271,11 @@ export const ItemsTable: React.FC<ItemsTableProps> = ({ items, onChange }) => {
 
                     <td className="py-1 px-1.5 text-right w-24">
                       <input
-                        type="number"
-                        step="any"
+                        type="text"
+                        inputMode="decimal"
                         value={
-                          item.miktar !== null &&
-                          item.miktar !== undefined &&
-                          Number.isFinite(Number(item.miktar))
-                            ? item.miktar
+                          item.miktar !== null && item.miktar !== undefined
+                            ? String(item.miktar)
                             : ''
                         }
                         onChange={(e) => {
@@ -296,12 +283,8 @@ export const ItemsTable: React.FC<ItemsTableProps> = ({ items, onChange }) => {
                           if (val === '') {
                             handleItemChange(index, 'miktar', null);
                           } else {
-                            const parsed = parseFloat(val);
-                            handleItemChange(
-                              index,
-                              'miktar',
-                              Number.isFinite(parsed) ? parsed : null
-                            );
+                            const parsed = parseTurkishNumber(val);
+                            handleItemChange(index, 'miktar', parsed !== null ? parsed : val);
                           }
                         }}
                         placeholder="0"
@@ -338,7 +321,7 @@ export const ItemsTable: React.FC<ItemsTableProps> = ({ items, onChange }) => {
                       <button
                         type="button"
                         onClick={() => handleRemoveItem(index)}
-                        className="opacity-70 sm:opacity-0 sm:group-hover:opacity-100 text-theme-muted hover:text-rose-400 min-w-[30px] min-h-[30px] flex items-center justify-center p-1 rounded transition-all active:scale-95"
+                        className="opacity-40 hover:opacity-100 text-theme-muted hover:text-rose-400 min-w-[30px] min-h-[30px] flex items-center justify-center p-1 rounded transition-all active:scale-95"
                         title="Satırı Sil"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -356,9 +339,7 @@ export const ItemsTable: React.FC<ItemsTableProps> = ({ items, onChange }) => {
             <span className="text-theme-muted truncate mr-2">Kalem Toplam Miktarı:</span>
             <div className="flex items-center space-x-1.5 shrink-0">
               <span className="font-mono text-sm text-blue-400 font-bold tabular-nums">
-                {Number.isFinite(totalQuantity)
-                  ? totalQuantity.toLocaleString('tr-TR', { maximumFractionDigits: 2 })
-                  : '0'}
+                {formatTurkishNumber(totalQuantity)}
               </span>
               <span className="text-theme-muted text-[11px]">Birim Toplam</span>
             </div>

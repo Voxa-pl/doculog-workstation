@@ -22,7 +22,8 @@ import {
   Inbox, 
   Eye, 
   FileEdit, 
-  Layers
+  Layers,
+  AlertTriangle
 } from 'lucide-react';
 
 export const App: React.FC = () => {
@@ -43,6 +44,11 @@ export const App: React.FC = () => {
   const [isProcessingBatch, setIsProcessingBatch] = useState(false);
   const [isProcessingCurrent, setIsProcessingCurrent] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(1);
+  const [isEditorDirty, setIsEditorDirty] = useState(false);
+  const isEditorDirtyRef = useRef(false);
+  isEditorDirtyRef.current = isEditorDirty;
+  const [pendingDocId, setPendingDocId] = useState<string | null>(null);
+  const [isUnsavedModalOpen, setIsUnsavedModalOpen] = useState(false);
 
   // View Navigation, Theme and Mobile Navigation states
   const [activeView, setActiveView] = useState<AppView>('station');
@@ -117,8 +123,11 @@ export const App: React.FC = () => {
       fetchDocuments();
     }, [fetchDocuments]),
     onDocumentUploaded: useCallback((doc: DocumentItem) => {
-      setSelectedDocId(doc.id);
-      setMobileTab('viewer');
+      // Aktif olarak form üzerinde düzenleme yapılıyorsa odak bozulmasın
+      if (!isEditorDirtyRef.current) {
+        setSelectedDocId(doc.id);
+        setMobileTab('viewer');
+      }
     }, []),
   });
 
@@ -138,12 +147,38 @@ export const App: React.FC = () => {
 
   const selectedDoc = documents.find((d) => d.id === selectedDocId) || null;
 
+  const requestSelectDoc = useCallback((targetId: string) => {
+    if (targetId === selectedDocId) return;
+    if (isEditorDirtyRef.current) {
+      setPendingDocId(targetId);
+      setIsUnsavedModalOpen(true);
+      return;
+    }
+    setSelectedDocId(targetId);
+    setMobileTab('viewer');
+  }, [selectedDocId]);
+
+  const handleDiscardAndSwitch = () => {
+    setIsEditorDirty(false);
+    if (pendingDocId) {
+      setSelectedDocId(pendingDocId);
+      setPendingDocId(null);
+      setMobileTab('viewer');
+    }
+    setIsUnsavedModalOpen(false);
+  };
+
+  const handleCancelSwitch = () => {
+    setPendingDocId(null);
+    setIsUnsavedModalOpen(false);
+  };
+
   const handleUploadFiles = async (files: File[]) => {
     setIsUploading(true);
     try {
       const uploaded = await documentApi.uploadFiles(files);
       setDocuments((prev) => [...uploaded, ...prev]);
-      if (uploaded.length > 0) {
+      if (uploaded.length > 0 && !isEditorDirtyRef.current) {
         setSelectedDocId(uploaded[0].id);
         setMobileTab('viewer');
       }
@@ -153,12 +188,6 @@ export const App: React.FC = () => {
     } finally {
       setIsUploading(false);
     }
-  };
-
-  const handleSelectDocMobile = (id: string) => {
-    setSelectedDocId(id);
-    // Mobilde belge seçilince doğrudan önizleme veya düzenlemeye yönlendir
-    setMobileTab('viewer');
   };
 
   const handleDeleteDoc = async (id: string) => {
@@ -256,23 +285,31 @@ export const App: React.FC = () => {
     fetchDocuments();
   };
 
-  const handleSelectNextDoc = () => {
+  const handleSelectNextDoc = useCallback(() => {
     const currentIndex = documents.findIndex((d) => d.id === selectedDocId);
     if (currentIndex >= 0 && currentIndex < documents.length - 1) {
-      setSelectedDocId(documents[currentIndex + 1].id);
+      requestSelectDoc(documents[currentIndex + 1].id);
     }
-  };
+  }, [documents, selectedDocId, requestSelectDoc]);
 
-  const handleSelectPrevDoc = () => {
+  const handleSelectPrevDoc = useCallback(() => {
     const currentIndex = documents.findIndex((d) => d.id === selectedDocId);
     if (currentIndex > 0) {
-      setSelectedDocId(documents[currentIndex - 1].id);
+      requestSelectDoc(documents[currentIndex - 1].id);
     }
-  };
+  }, [documents, selectedDocId, requestSelectDoc]);
 
   // Linear / Vim Tarzı Klavye Kısayolları (J = Sonraki, K = Önceki Evrak)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (isUnsavedModalOpen) {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          handleCancelSwitch();
+        }
+        return;
+      }
+
       // Input veya textarea içindeyse kısayolları engelle
       const target = e.target as HTMLElement;
       if (
@@ -294,7 +331,7 @@ export const App: React.FC = () => {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [documents, selectedDocId]);
+  }, [documents, selectedDocId, isUnsavedModalOpen, handleSelectNextDoc, handleSelectPrevDoc]);
 
   const handleExportBatchExcel = () => {
     window.open(documentApi.getBatchExcelUrl(), '_blank');
@@ -306,13 +343,15 @@ export const App: React.FC = () => {
       if (exists) return prev;
       return [doc, ...prev];
     });
-    setSelectedDocId(doc.id);
     setSummary((prev) => ({
       ...prev,
       toplam_belge: prev.toplam_belge + 1,
       kuyrukta: prev.kuyrukta + 1,
     }));
-    setMobileTab('viewer');
+    if (!isEditorDirtyRef.current) {
+      setSelectedDocId(doc.id);
+      setMobileTab('viewer');
+    }
     handleProcessDoc(doc.id);
   };
 
@@ -348,7 +387,7 @@ export const App: React.FC = () => {
                 documents={documents}
                 selectedDocId={selectedDocId}
                 summary={summary}
-                onSelectDoc={handleSelectDocMobile}
+                onSelectDoc={requestSelectDoc}
                 onUploadFiles={handleUploadFiles}
                 onDeleteDoc={handleDeleteDoc}
                 onProcessDoc={handleProcessDoc}
@@ -381,6 +420,7 @@ export const App: React.FC = () => {
                 onProcessDocument={handleProcessDoc}
                 onSelectNextDoc={handleSelectNextDoc}
                 onDeleteDoc={handleDeleteDoc}
+                onDirtyChange={setIsEditorDirty}
                 isProcessing={isProcessingCurrent}
               />
             </ErrorBoundary>
@@ -396,9 +436,8 @@ export const App: React.FC = () => {
               theme={theme}
               onSwitchToStation={() => setActiveView('station')}
               onSelectDocument={(id) => {
-                setSelectedDocId(id);
+                requestSelectDoc(id);
                 setActiveView('station');
-                setMobileTab('viewer');
               }}
             />
           </ErrorBoundary>
@@ -480,6 +519,50 @@ export const App: React.FC = () => {
         onClose={() => setIsQrBridgeModalOpen(false)}
         onDocumentReceived={handleMobileDocumentReceived}
       />
+
+      {/* Kaydedilmemiş Değişiklikler Uyarı Modalı */}
+      {isUnsavedModalOpen && (
+        <div 
+          className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-150"
+          onClick={handleCancelSwitch}
+        >
+          <div 
+            className="w-full max-w-md bg-theme-surface border border-amber-500/30 rounded-xl p-5 shadow-2xl space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start gap-3">
+              <div className="p-2.5 rounded-lg bg-amber-500/10 text-amber-400 shrink-0 border border-amber-500/20">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-sm font-semibold text-theme-primary">
+                  Kaydedilmemiş Değişiklikler Var
+                </h3>
+                <p className="text-xs text-theme-muted leading-relaxed">
+                  Şu anki evrak üzerinde yaptığınız düzenlemeleri henüz kaydetmediniz. Başka bir evraka geçerseniz bu değişiklikler kaybolacaktır.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-theme-subtle">
+              <button
+                type="button"
+                onClick={handleCancelSwitch}
+                className="px-3.5 py-1.5 text-xs font-medium text-theme-muted hover:text-theme-primary bg-theme-panel hover:bg-theme-subtle rounded-lg border border-theme-subtle transition-colors"
+              >
+                Düzenlemeye Devam Et
+              </button>
+              <button
+                type="button"
+                onClick={handleDiscardAndSwitch}
+                className="px-3.5 py-1.5 text-xs font-medium text-white bg-rose-600 hover:bg-rose-500 rounded-lg shadow-sm transition-colors"
+              >
+                Değişiklikleri Yoksay ve Geç
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
