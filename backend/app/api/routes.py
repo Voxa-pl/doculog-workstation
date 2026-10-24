@@ -57,7 +57,7 @@ async def health_check():
         "sistem": settings.PROJECT_NAME,
         "versiyon": settings.VERSION,
         "durum": "calisiyor",
-        "motor": "DocuLog OCR Engine v1.0"
+        "motor": "Waybill OCR Engine v1.0"
     }
 
 @router.get("/documents", response_model=QueueResponse)
@@ -644,7 +644,7 @@ async def export_single_json(doc_id: str):
     export_path = erp_exporter.export_single_erp_json(doc)
     return FileResponse(
         path=export_path,
-        filename=f"DocuLog_Irsaliye_{doc_id[:8]}.json",
+        filename=f"Waybill_Irsaliye_{doc_id[:8]}.json",
         media_type="application/json"
     )
 
@@ -672,7 +672,7 @@ async def export_batch_json():
     date_str = datetime.now().strftime("%Y%m%d_%H%M")
     return FileResponse(
         path=export_path,
-        filename=f"DocuLog_Toplu_Irsaliyeler_{date_str}.json",
+        filename=f"Waybill_Toplu_Irsaliyeler_{date_str}.json",
         media_type="application/json"
     )
 

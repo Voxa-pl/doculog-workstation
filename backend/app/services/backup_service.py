@@ -64,7 +64,7 @@ class BackupService:
         db_size_bytes = db_path.stat().st_size if db_path.exists() else 0
 
         now_str = datetime.now().strftime("%Y%m%d_%H%M%S")
-        backup_filename = f"doculog_backup_{now_str}.tar.gz"
+        backup_filename = f"waybill_backup_{now_str}.tar.gz"
         backup_path = BACKUP_DIR / backup_filename
 
         # 3. Manifest hazırla
@@ -130,7 +130,11 @@ class BackupService:
         """En son keep_count adet yedeği saklar, eskileri siler"""
         try:
             cls._ensure_backup_dir()
-            archives = sorted(BACKUP_DIR.glob("doculog_backup_*.tar.gz"), key=lambda p: p.stat().st_mtime, reverse=True)
+            archives = sorted(
+                list(BACKUP_DIR.glob("waybill_backup_*.tar.gz")) + list(BACKUP_DIR.glob("doculog_backup_*.tar.gz")),
+                key=lambda p: p.stat().st_mtime,
+                reverse=True
+            )
             if len(archives) > keep_count:
                 for old_arch in archives[keep_count:]:
                     try:
@@ -150,7 +154,11 @@ class BackupService:
         db_path = settings.BACKEND_DIR / "doculog.db"
 
         backups_list: List[Dict[str, Any]] = []
-        archives = sorted(BACKUP_DIR.glob("doculog_backup_*.tar.gz"), key=lambda p: p.stat().st_mtime, reverse=True)
+        archives = sorted(
+            list(BACKUP_DIR.glob("waybill_backup_*.tar.gz")) + list(BACKUP_DIR.glob("doculog_backup_*.tar.gz")),
+            key=lambda p: p.stat().st_mtime,
+            reverse=True
+        )
 
         for arch in archives:
             sha_file = Path(f"{arch}.sha256")
@@ -191,7 +199,7 @@ class BackupService:
         """Güvenli şekilde yedek dosya yolunu döner (Path traversal engelli)"""
         clean_name = Path(filename).name
         target = BACKUP_DIR / clean_name
-        if target.exists() and target.is_file() and target.name.startswith("doculog_backup_"):
+        if target.exists() and target.is_file() and (target.name.startswith("waybill_backup_") or target.name.startswith("doculog_backup_")):
             return target
         return None
 

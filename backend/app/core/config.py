@@ -11,7 +11,7 @@ load_dotenv(WORKSPACE_DIR / ".env")
 load_dotenv(BACKEND_DIR / ".env")
 
 class Settings:
-    PROJECT_NAME: str = "Lojistik İrsaliye Ayrıştırma İş İstasyonu"
+    PROJECT_NAME: str = "Waybill — Lojistik İrsaliye ve Mal Kabul İstasyonu"
     VERSION: str = "1.0.0"
     API_PREFIX: str = "/api"
 

@@ -379,7 +379,7 @@ class ErpLinter:
                 "PSTNG_DATE": date_str,
                 "DOC_DATE": date_str,
                 "REF_DOC_NO": str(header.get("irsaliye_no") or "")[:16],
-                "PR_UNAME": "DOCULOG_AI"
+                "PR_UNAME": "WAYBILL_AI"
             },
             "GOODSMVT_CODE": {"GM_CODE": "01"},
             "GOODSMVT_ITEM": items_payload

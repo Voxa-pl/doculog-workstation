@@ -41,7 +41,7 @@ class ErpExporter:
         """Tekil irsaliye için standart normalize B2B JSON dosyası üretir"""
         payload = self._doc_to_erp_dict(doc)
         clean_id = doc.id[:8]
-        file_path = settings.EXPORT_DIR / f"DocuLog_Irsaliye_{clean_id}.json"
+        file_path = settings.EXPORT_DIR / f"Waybill_Irsaliye_{clean_id}.json"
         with open(file_path, "w", encoding="utf-8") as f:
             json.dump(payload, f, ensure_ascii=False, indent=2)
         return file_path
@@ -54,13 +54,13 @@ class ErpExporter:
                 items.append(self._doc_to_erp_dict(doc))
 
         batch_payload = {
-            "sistem": "DocuLog Workstation",
+            "sistem": "Waybill Workstation",
             "olusturma_tarihi": datetime.now().isoformat(),
             "toplam_evrak": len(items),
             "irsaliyeler": items
         }
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        file_path = settings.EXPORT_DIR / f"DocuLog_Toplu_Irsaliyeler_{timestamp}.json"
+        file_path = settings.EXPORT_DIR / f"Waybill_Toplu_Irsaliyeler_{timestamp}.json"
         with open(file_path, "w", encoding="utf-8") as f:
             json.dump(batch_payload, f, ensure_ascii=False, indent=2)
         return file_path

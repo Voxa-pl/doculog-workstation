@@ -87,7 +87,7 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
           </div>
           <div>
             <h1 className="font-bold text-xs sm:text-sm tracking-wide text-theme-primary">
-              DocuLog
+              Waybill
             </h1>
           </div>
         </div>

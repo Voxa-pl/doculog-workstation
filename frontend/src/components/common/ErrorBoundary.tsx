@@ -130,7 +130,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
             </span>
 
             <h2 className="text-xl font-bold text-white mb-2">
-              {title || 'DocuLog Workstation Beklenmeyen Bir Hatayla Karşılaştı'}
+              {title || 'Waybill Workstation Beklenmeyen Bir Hatayla Karşılaştı'}
             </h2>
 
             <p className="text-xs text-slate-400 mb-6 leading-relaxed">

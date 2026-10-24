@@ -274,7 +274,7 @@ class ExcelExporter:
         # Ana Başlık Banner
         ws_exec.merge_cells("A1:G1")
         title_cell = ws_exec["A1"]
-        title_cell.value = "DOCULOG WORKSTATION — RESMİ MAL KABUL VE LOJİSTİK YÖNETİCİ RAPORU"
+        title_cell.value = "WAYBILL WORKSTATION — RESMİ MAL KABUL VE LOJİSTİK YÖNETİCİ RAPORU"
         title_cell.font = Font(name="Segoe UI", size=13, bold=True, color="FFFFFF")
         title_cell.fill = cls.HEADER_FILL
         title_cell.alignment = Alignment(horizontal="center", vertical="center")
@@ -283,7 +283,7 @@ class ExcelExporter:
         # Meta Bilgi Satırları
         meta_info = [
             ("Rapor Tarihi:", analytics_data.son_guncelleme or datetime.now().strftime("%d.%m.%Y %H:%M:%S")),
-            ("Raporu Üreten Sistem:", "DocuLog Workstation Enterprise Logistics Cockpit"),
+            ("Raporu Üreten Sistem:", "Waybill Workstation Enterprise Logistics Cockpit"),
             ("Genel Mal Kabul Durumu:", "Aktif Sevkiyat Akışı" if not analytics_data.empty else "Evrak Kuyruğu Boş")
         ]
         r_meta = 3
