@@ -1,6 +1,6 @@
 import React from 'react';
 import { LineItem } from '../../types/irsaliye';
-import { Plus, Trash2, Package } from 'lucide-react';
+import { Plus, Minus, Trash2, Package, Layers } from 'lucide-react';
 
 interface ItemsTableProps {
   items?: LineItem[] | null;
@@ -35,6 +35,15 @@ export const ItemsTable: React.FC<ItemsTableProps> = ({ items, onChange }) => {
     onChange(updated);
   };
 
+  const handleStepQuantity = (index: number, delta: number) => {
+    const item = safeItems[index];
+    if (!item) return;
+    const current = Number(item.miktar);
+    const validCurrent = Number.isFinite(current) ? current : 0;
+    const nextVal = Math.max(0, Math.round((validCurrent + delta) * 100) / 100);
+    handleItemChange(index, 'miktar', nextVal);
+  };
+
   const handleAddItem = () => {
     const newItem: LineItem = {
       sira_no: safeItems.length + 1,
@@ -60,23 +69,178 @@ export const ItemsTable: React.FC<ItemsTableProps> = ({ items, onChange }) => {
   }, 0);
 
   return (
-    <div className="space-y-2.5">
+    <div className="space-y-3">
+      {/* Üst Başlık & Hızlı Kalem Ekleme Butonu */}
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-1.5 text-blue-400 font-semibold uppercase text-[11px] tracking-wider min-w-0">
           <Package className="w-3.5 h-3.5 shrink-0" />
-          <span className="truncate">Ürün ve Malzeme Kalemleri ({safeItems.length})</span>
+          <span className="truncate">Mal ve Hizmet Kalemleri ({safeItems.length})</span>
         </div>
         <button
           type="button"
           onClick={handleAddItem}
-          className="flex items-center space-x-1 text-xs bg-blue-600/20 hover:bg-blue-600 border border-blue-500/30 text-blue-300 hover:text-white px-3 py-1.5 min-h-[34px] rounded-md transition-all font-medium active:scale-95 shrink-0"
+          className="flex items-center space-x-1 text-xs bg-blue-600/20 hover:bg-blue-600 border border-blue-500/30 text-blue-300 hover:text-white px-2.5 sm:px-3 py-1.5 min-h-[34px] rounded-lg transition-all font-medium active:scale-95 shrink-0"
         >
           <Plus className="w-3.5 h-3.5" />
           <span>Kalem Ekle</span>
         </button>
       </div>
 
-      <div className="border border-theme-subtle rounded-lg overflow-hidden bg-theme-card/60 shadow-sm">
+      {/* 1. MOBİL GÖRÜNÜM: Dokunmatik Kalem Kartları (Touch Cards) */}
+      <div className="block md:hidden space-y-2.5">
+        {safeItems.length === 0 ? (
+          <div className="p-6 text-center rounded-xl bg-theme-card/40 border border-dashed border-theme-subtle space-y-2">
+            <Package className="w-8 h-8 text-theme-muted mx-auto stroke-[1.5]" />
+            <p className="text-xs text-theme-muted">Kayıtlı ürün veya malzeme kalemi bulunamadı.</p>
+            <button
+              type="button"
+              onClick={handleAddItem}
+              className="mt-2 inline-flex items-center space-x-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-semibold"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>İlk Kalemi Ekle</span>
+            </button>
+          </div>
+        ) : (
+          safeItems.map((item, index) => {
+            const qtyNum = Number(item.miktar);
+            const isSuspicious = !item.mal_hizmet || !Number.isFinite(qtyNum) || qtyNum <= 0;
+
+            return (
+              <div
+                key={index}
+                className={`p-3 bg-theme-card/90 border rounded-xl space-y-2.5 touch-card-spring transition-all shadow-xs ${
+                  isSuspicious 
+                    ? 'border-amber-500/40 bg-amber-500/5' 
+                    : 'border-theme-subtle'
+                }`}
+              >
+                {/* Kart Üst Başlık & Silme */}
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                    <span className="font-mono text-[10px] text-theme-muted bg-theme-surface border border-theme-subtle px-1.5 py-0.5 rounded shrink-0">
+                      #{item.sira_no || index + 1}
+                    </span>
+                    <input
+                      type="text"
+                      value={item.mal_hizmet ?? ''}
+                      onChange={(e) => handleItemChange(index, 'mal_hizmet', e.target.value)}
+                      placeholder="Mal / Ürün tanımı..."
+                      className="w-full bg-theme-surface/70 border border-theme-subtle/80 focus:border-blue-500 rounded-md px-2 py-1.5 text-xs text-theme-primary placeholder-theme-muted outline-none transition-colors truncate"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveItem(index)}
+                    className="p-1.5 min-w-[32px] min-h-[32px] rounded-lg text-theme-muted hover:text-rose-400 hover:bg-rose-500/10 flex items-center justify-center transition-all shrink-0 active:scale-95"
+                    title="Kalemi Sil"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                {/* Miktar Stepper & Birim Seçici Satırı */}
+                <div className="flex items-center justify-between gap-2 pt-1 border-t border-theme-subtle/50">
+                  <span className="text-[10px] text-theme-muted uppercase tracking-wider font-semibold">
+                    Miktar & Birim:
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    {/* Hızlı Azalt (-) */}
+                    <button
+                      type="button"
+                      onClick={() => handleStepQuantity(index, -1)}
+                      className="w-7 h-7 flex items-center justify-center rounded bg-theme-surface border border-theme-subtle text-theme-secondary hover:text-theme-primary active:scale-90 transition-all"
+                      title="1 Azalt"
+                    >
+                      <Minus className="w-3 h-3" />
+                    </button>
+
+                    {/* Miktar Girişi */}
+                    <input
+                      type="number"
+                      step="any"
+                      value={
+                        item.miktar !== null &&
+                        item.miktar !== undefined &&
+                        Number.isFinite(Number(item.miktar))
+                          ? item.miktar
+                          : ''
+                      }
+                      onChange={(e) => {
+                        const val = e.target.value.trim();
+                        if (val === '') {
+                          handleItemChange(index, 'miktar', null);
+                        } else {
+                          const parsed = parseFloat(val);
+                          handleItemChange(
+                            index,
+                            'miktar',
+                            Number.isFinite(parsed) ? parsed : null
+                          );
+                        }
+                      }}
+                      placeholder="0"
+                      className="w-16 sm:w-20 text-center font-mono font-bold text-xs bg-theme-surface border border-theme-subtle focus:border-blue-500 rounded px-1.5 py-1 text-blue-400 outline-none tabular-nums"
+                    />
+
+                    {/* Hızlı Arttır (+) */}
+                    <button
+                      type="button"
+                      onClick={() => handleStepQuantity(index, 1)}
+                      className="w-7 h-7 flex items-center justify-center rounded bg-theme-surface border border-theme-subtle text-theme-secondary hover:text-theme-primary active:scale-90 transition-all"
+                      title="1 Arttır"
+                    >
+                      <Plus className="w-3 h-3" />
+                    </button>
+
+                    {/* Birim Seçici */}
+                    <select
+                      value={item.birim || 'Adet'}
+                      onChange={(e) => handleItemChange(index, 'birim', e.target.value)}
+                      className="bg-theme-surface border border-theme-subtle rounded px-2 py-1 text-xs text-theme-primary font-medium outline-none focus:border-blue-500"
+                    >
+                      {COMMON_UNITS.map((u) => (
+                        <option key={u} value={u}>
+                          {u}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Notlar / Lot Girişi (Varsa veya eklemek istenirse) */}
+                <div className="pt-0.5">
+                  <input
+                    type="text"
+                    value={item.notlar || ''}
+                    onChange={(e) => handleItemChange(index, 'notlar', e.target.value)}
+                    placeholder="Lot / seri / parti veya fire notu (isteğe bağlı)..."
+                    className="w-full bg-theme-surface/50 border border-transparent focus:border-theme-subtle rounded px-2 py-1 text-[11px] text-theme-secondary placeholder-theme-muted outline-none transition-colors"
+                  />
+                </div>
+              </div>
+            );
+          })
+        )}
+
+        {/* Mobil Kalem Toplam Özeti */}
+        {safeItems.length > 0 && (
+          <div className="p-2.5 rounded-xl bg-theme-surface border border-theme-subtle flex items-center justify-between text-xs">
+            <span className="text-theme-muted font-medium">Toplam Kalem Miktarı:</span>
+            <div className="flex items-center space-x-1.5">
+              <span className="font-mono text-sm text-blue-400 font-bold tabular-nums">
+                {Number.isFinite(totalQuantity)
+                  ? totalQuantity.toLocaleString('tr-TR', { maximumFractionDigits: 2 })
+                  : '0'}
+              </span>
+              <span className="text-theme-muted text-[11px]">Birim Toplam</span>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* 2. MASAÜSTÜ GÖRÜNÜM: Tam Tablo (Desktop Spreadsheet) */}
+      <div className="hidden md:block border border-theme-subtle rounded-lg overflow-hidden bg-theme-card/60 shadow-sm">
         <div className="overflow-x-auto overscroll-x-contain">
           <table className="w-full min-w-[500px] text-left text-xs border-collapse">
             <thead>
@@ -147,13 +311,13 @@ export const ItemsTable: React.FC<ItemsTableProps> = ({ items, onChange }) => {
 
                     <td className="py-1 px-1.5 text-center w-24">
                       <input
-                        list={`units-${index}`}
+                        list={`units-desktop-${index}`}
                         type="text"
                         value={item.birim || 'Adet'}
                         onChange={(e) => handleItemChange(index, 'birim', e.target.value)}
                         className="w-full text-center bg-transparent hover:bg-theme-surface/80 focus:bg-theme-surface border border-transparent focus:border-blue-500 rounded px-1.5 py-1 text-theme-primary text-xs sm:text-sm focus:outline-none transition-colors min-h-[32px]"
                       />
-                      <datalist id={`units-${index}`}>
+                      <datalist id={`units-desktop-${index}`}>
                         {COMMON_UNITS.map((u) => (
                           <option key={u} value={u} />
                         ))}

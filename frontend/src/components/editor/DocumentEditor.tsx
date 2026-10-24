@@ -33,7 +33,8 @@ import {
   Building2,
   Truck,
   QrCode,
-  X
+  X,
+  MoreHorizontal
 } from 'lucide-react';
 import { documentApi } from '../../services/api';
 
@@ -77,10 +78,13 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
   isProcessing,
 }) => {
   const [formData, setFormData] = useState<IrsaliyeData | null>(null);
-  const [activeTab, setActiveTab] = useState<'all' | 'header' | 'items'>('all');
+  const [activeTab, setActiveTab] = useState<'all' | 'header' | 'items'>(() => {
+    return typeof window !== 'undefined' && window.innerWidth < 768 ? 'items' : 'all';
+  });
   const [isSaving, setIsSaving] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
+  const [isMobileActionSheetOpen, setIsMobileActionSheetOpen] = useState(false);
   const [isCopiedErp, setIsCopiedErp] = useState(false);
   const [cadenceWarning, setCadenceWarning] = useState(false);
   const [poMatchData, setPoMatchData] = useState<any | null>(null);
@@ -354,6 +358,9 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
     // Matematiksel uyuşmazlık durumunda ilk onay denemesinde mikro-direnç göster
     if (!force && isMathDiscrepancy && !cadenceWarningRef.current) {
       playCadenceHaptic();
+      if (typeof navigator !== 'undefined' && navigator.vibrate) {
+        navigator.vibrate([40, 60, 40]);
+      }
       cadenceWarningRef.current = true;
       setCadenceWarning(true);
       if (cadenceTimerRef.current) clearTimeout(cadenceTimerRef.current);
@@ -371,6 +378,14 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
     if (onSelectNextDoc) {
       onSelectNextDoc();
     }
+  };
+
+  const handleMobileApproveWithHaptic = () => {
+    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+      navigator.vibrate(18);
+    }
+    playCadenceHaptic();
+    handleApproveAndNext(cadenceWarning);
   };
 
   const handleOpenPoReconcile = async () => {
@@ -433,9 +448,56 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
   };
 
   return (
-    <aside className="w-full md:w-80 lg:w-[420px] xl:w-[480px] h-full bg-theme-surface border-l border-theme-subtle flex flex-col shrink-0 select-none overflow-hidden">
-      {/* Üst Eylem ve Durum Çubuğu */}
-      <div className="p-3 border-b border-theme-subtle bg-theme-surface space-y-2.5">
+    <aside className="w-full md:w-80 lg:w-[420px] xl:w-[480px] h-full bg-theme-surface border-l border-theme-subtle flex flex-col shrink-0 select-none overflow-hidden relative">
+      {/* =========================================================================
+          ÜST ÇUBUK: MOBİL İÇİN YALINLAŞTIRILMIŞ (44px) / MASAÜSTÜ İÇİN TAM ARAÇ ÇUBUĞU
+          ========================================================================= */}
+      
+      {/* 1. MOBİL ÜST ÇUBUK (block md:hidden) */}
+      <div className="flex md:hidden p-3 border-b border-theme-subtle bg-theme-surface/95 backdrop-blur items-center justify-between gap-2 shrink-0">
+        <div className="flex items-center space-x-2 min-w-0">
+          <span className="text-xs font-bold text-theme-primary uppercase tracking-wider truncate">
+            {formData.header?.irsaliye_no ? `İrsaliye: ${formData.header.irsaliye_no}` : 'Doğrulama İstasyonu'}
+          </span>
+          {gibQrData?.is_gib_verified && (
+            <span className="inline-flex items-center h-4.5 bg-emerald-950/40 border border-emerald-500/25 rounded px-1 text-[9px] font-bold text-emerald-300 uppercase tracking-wider shrink-0">
+              GİB Mühürlü
+            </span>
+          )}
+          {isNonInvoice && (
+            <span className="inline-flex items-center h-4.5 bg-rose-500/10 border border-rose-500/20 rounded px-1.5 text-[9px] font-bold text-rose-400 shrink-0">
+              İrsaliye Dışı
+            </span>
+          )}
+        </div>
+
+        <div className="flex items-center space-x-1.5 shrink-0">
+          {hasUnsavedChanges && (
+            <button
+              type="button"
+              onClick={() => handleSaveChanges()}
+              disabled={isSaving}
+              className="p-1.5 rounded-lg bg-blue-600 text-white min-w-[32px] min-h-[32px] flex items-center justify-center shadow-xs active:scale-95 transition-all"
+              title="Değişiklikleri Kaydet"
+            >
+              <Save className="w-3.5 h-3.5" />
+            </button>
+          )}
+
+          {/* Mobilde Tüm ERP & İhracat & Araçları Toplayan "⋯ İşlemler" Butonu */}
+          <button
+            type="button"
+            onClick={() => setIsMobileActionSheetOpen(true)}
+            className="flex items-center space-x-1 h-8 px-2.5 rounded-lg bg-theme-card hover:bg-theme-card-hover text-theme-secondary hover:text-theme-primary text-xs font-semibold border border-theme-subtle shadow-xs active:scale-95 transition-all"
+          >
+            <MoreHorizontal className="w-4 h-4 text-blue-400" />
+            <span>İşlemler</span>
+          </button>
+        </div>
+      </div>
+
+      {/* 2. MASAÜSTÜ ÜST ÇUBUK (hidden md:block) */}
+      <div className="hidden md:block p-3 border-b border-theme-subtle bg-theme-surface space-y-2.5 shrink-0">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center space-x-2">
             <span className="text-xs font-bold text-theme-primary uppercase tracking-wider flex items-center gap-1.5">
@@ -504,7 +566,7 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
           </div>
         </div>
 
-        {/* Aksiyon Butonları (Net Hiyerarşi & Tek Tıkla Reddetme / Onay) */}
+        {/* Masaüstü Aksiyon Butonları */}
         <div className="flex items-center space-x-2">
           {isNonInvoice ? (
             onDeleteDoc && (
@@ -647,45 +709,45 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
             </button>
           )}
         </div>
+      </div>
 
-        {/* Cadence Braking (Ritmik Frenleme) Mikro-Direnç Uyarı Bandı */}
-        {cadenceWarning && (
-          <div className="p-2.5 rounded-lg bg-amber-500/15 border border-amber-500/40 cadence-shake flex flex-col gap-2 shadow-lg">
-            <div className="flex items-start space-x-2">
-              <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-xs font-bold text-amber-300">Ritmik Frenleme: Miktar Uyuşmazlığı!</h4>
-                  <span className="text-[10px] text-amber-300/80 font-mono">3sn içinde override</span>
-                </div>
-                <p className="text-[11px] text-amber-200/90 leading-tight mt-0.5">
-                  Kalemler toplamı ({totalCalculatedQty.toLocaleString('tr-TR')}) ile irsaliye dip toplamı ({parsedDocTotalQty?.toLocaleString('tr-TR')}) uyuşmuyor.
-                </p>
+      {/* Cadence Braking (Ritmik Frenleme) Mikro-Direnç Uyarı Bandı (Her iki ekranda da temiz görünür) */}
+      {cadenceWarning && (
+        <div className="p-2.5 mx-3 mt-2 rounded-xl bg-amber-500/15 border border-amber-500/40 cadence-shake flex flex-col gap-2 shadow-lg shrink-0">
+          <div className="flex items-start space-x-2">
+            <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs font-bold text-amber-300">Ritmik Frenleme: Miktar Uyuşmazlığı!</h4>
+                <span className="text-[10px] text-amber-300/80 font-mono">3sn içinde override</span>
               </div>
-            </div>
-            <div className="flex items-center justify-end space-x-2 pt-1 border-t border-amber-500/20">
-              <button
-                type="button"
-                onClick={() => {
-                  cadenceWarningRef.current = false;
-                  setCadenceWarning(false);
-                }}
-                className="px-2.5 py-1 text-[11px] rounded bg-theme-card hover:bg-theme-card-hover text-theme-secondary hover:text-theme-primary transition-all font-medium border border-theme-subtle"
-              >
-                Düzelt
-              </button>
-              <button
-                type="button"
-                onClick={() => handleApproveAndNext(true)}
-                className="px-3 py-1 text-[11px] rounded bg-amber-600 hover:bg-amber-500 text-white font-bold transition-all shadow-sm flex items-center space-x-1"
-              >
-                <span>Yine de Onayla</span>
-                <span className="text-[10px] opacity-80 font-mono">(Ctrl+↵)</span>
-              </button>
+              <p className="text-[11px] text-amber-200/90 leading-tight mt-0.5">
+                Kalemler toplamı ({totalCalculatedQty.toLocaleString('tr-TR')}) ile irsaliye dip toplamı ({parsedDocTotalQty?.toLocaleString('tr-TR')}) uyuşmuyor.
+              </p>
             </div>
           </div>
-        )}
-      </div>
+          <div className="flex items-center justify-end space-x-2 pt-1 border-t border-amber-500/20">
+            <button
+              type="button"
+              onClick={() => {
+                cadenceWarningRef.current = false;
+                setCadenceWarning(false);
+              }}
+              className="px-2.5 py-1 text-[11px] rounded bg-theme-card hover:bg-theme-card-hover text-theme-secondary hover:text-theme-primary transition-all font-medium border border-theme-subtle"
+            >
+              Düzelt
+            </button>
+            <button
+              type="button"
+              onClick={() => handleApproveAndNext(true)}
+              className="px-3 py-1 text-[11px] rounded bg-amber-600 hover:bg-amber-500 text-white font-bold transition-all shadow-sm flex items-center space-x-1"
+            >
+              <span>Yine de Onayla</span>
+              <span className="text-[10px] opacity-80 font-mono">(Ctrl+↵)</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* İrsaliye Dışı Belgede "Kusursuz Kararlılık" Uygunsuzluk & Ayıklama Paneli */}
       {isNonInvoice ? (
@@ -728,15 +790,15 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
               <RefreshCw className={`w-3.5 h-3.5 ${isProcessing ? 'animate-spin text-blue-400' : ''}`} />
               <span>Yeniden Analiz Et</span>
             </button>
-            <p className="text-[10px] text-theme-muted">
+            <p className="text-[10px] text-theme-muted hidden sm:block">
               İpucu: Klavyeden <kbd className="px-1 py-0.5 bg-theme-card border border-theme-subtle rounded font-mono">Delete</kbd> tuşuna basarak anında sonraki evraka geçebilirsiniz.
             </p>
           </div>
         </div>
       ) : (
         <>
-          {/* Matematiksel Mutabakat Rozeti, 3-Way PO & U-ETDS Bakanlık Butonları */}
-          <div className="px-3 pt-3 space-y-2">
+          {/* Masaüstünde Matematiksel Mutabakat Rozeti & 3-Way PO & U-ETDS Bakanlık Butonları */}
+          <div className="hidden md:block px-3 pt-3 space-y-2 shrink-0">
             <div className="flex items-center justify-between">
               <span className="text-[10px] font-bold text-theme-muted uppercase tracking-wider">
                 Doğrulama & Mutabakat
@@ -807,56 +869,67 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
             ) : null}
           </div>
 
-          {/* Akıllı Sekme / Görünüm Seçici */}
-          <div className="flex border-b border-theme-subtle bg-theme-surface px-2 sm:px-3 pt-2 shrink-0 gap-1 overflow-x-auto no-scrollbar">
+          {/* Akıllı Sekme / Segment Seçici: Mobilde Geniş Başparmak Hedefleri */}
+          <div className="flex border-b border-theme-subtle bg-theme-surface px-2 sm:px-3 pt-2 shrink-0 gap-1 select-none">
+            {/* Kalemler Sekmesi - Mobilde En Sık Kullanılan Başparmak Hedefi */}
+            <button
+              type="button"
+              onClick={() => setActiveTab('items')}
+              className={`flex-1 md:flex-initial flex items-center justify-center space-x-1.5 px-3 py-2 min-h-[36px] text-xs font-semibold rounded-t-lg transition-all tactile-btn ${
+                activeTab === 'items'
+                  ? 'border-b-2 border-blue-500 text-blue-400 bg-theme-card'
+                  : 'text-theme-muted hover:text-theme-primary'
+              }`}
+            >
+              <Package className="w-3.5 h-3.5" />
+              <span>Kalemler ({formData.kalemler?.length || 0})</span>
+            </button>
+
+            {/* Başlık & Taraflar */}
+            <button
+              type="button"
+              onClick={() => setActiveTab('header')}
+              className={`flex-1 md:flex-initial flex items-center justify-center space-x-1.5 px-3 py-2 min-h-[36px] text-xs font-semibold rounded-t-lg transition-all tactile-btn ${
+                activeTab === 'header'
+                  ? 'border-b-2 border-blue-500 text-blue-400 bg-theme-card'
+                  : 'text-theme-muted hover:text-theme-primary'
+              }`}
+            >
+              <FileText className="w-3.5 h-3.5" />
+              <span>Başlık & Firma</span>
+            </button>
+
+            {/* Masaüstünde "Tümü" Sekmesi */}
             <button
               type="button"
               onClick={() => setActiveTab('all')}
-              className={`flex items-center space-x-1.5 px-3 py-1.5 min-h-[34px] text-xs font-semibold border-b-2 transition-all whitespace-nowrap tactile-btn ${
+              className={`hidden md:flex flex-initial items-center space-x-1.5 px-3 py-2 min-h-[36px] text-xs font-semibold rounded-t-lg transition-all tactile-btn ${
                 activeTab === 'all'
-                  ? 'border-indigo-500 text-indigo-400 bg-theme-card rounded-t'
-                  : 'border-transparent text-theme-muted hover:text-theme-primary'
+                  ? 'border-b-2 border-indigo-500 text-indigo-400 bg-theme-card'
+                  : 'text-theme-muted hover:text-theme-primary'
               }`}
             >
               <Layers className="w-3.5 h-3.5" />
               <span>Tümü</span>
               <span className="text-[10px] text-theme-muted font-mono hidden sm:inline">(1)</span>
             </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveTab('header')}
-              className={`flex items-center space-x-1.5 px-3 py-1.5 min-h-[34px] text-xs font-semibold border-b-2 transition-all whitespace-nowrap tactile-btn ${
-                activeTab === 'header'
-                  ? 'border-blue-500 text-blue-400 bg-theme-card rounded-t'
-                  : 'border-transparent text-theme-muted hover:text-theme-primary'
-              }`}
-            >
-              <FileText className="w-3.5 h-3.5" />
-              <span>Başlık & Taraflar</span>
-              <span className="text-[10px] text-theme-muted font-mono hidden sm:inline">(2)</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveTab('items')}
-              className={`flex items-center space-x-1.5 px-3 py-1.5 min-h-[34px] text-xs font-semibold border-b-2 transition-all whitespace-nowrap tactile-btn ${
-                activeTab === 'items'
-                  ? 'border-blue-500 text-blue-400 bg-theme-card rounded-t'
-                  : 'border-transparent text-theme-muted hover:text-theme-primary'
-              }`}
-            >
-              <Package className="w-3.5 h-3.5" />
-              <span>Kalemler ({formData.kalemler?.length || 0})</span>
-              <span className="text-[10px] text-theme-muted font-mono hidden sm:inline">(3)</span>
-            </button>
           </div>
 
-          {/* Form Gövdesi */}
-          <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-4 custom-scrollbar overscroll-contain">
-            {/* Akıcı / Tümü Görünümü veya Yalnızca Başlık */}
+          {/* Form Gövdesi (Scroll Area) */}
+          <div className="flex-1 overflow-y-auto p-3 sm:p-4 pb-20 md:pb-4 space-y-4 custom-scrollbar overscroll-contain">
+            {/* Kalemler Görünümü (Mobilde Öncelikli) */}
+            {(activeTab === 'all' || activeTab === 'items') && (
+              <div className="space-y-4 tab-pane-enter" data-tab-section="items">
+                <ItemsTable
+                  items={formData.kalemler || []}
+                  onChange={handleItemsChange}
+                />
+              </div>
+            )}
+
+            {/* Başlık ve Taraflar Görünümü */}
             {(activeTab === 'all' || activeTab === 'header') && (
-              <div className="space-y-4" data-tab-section="header">
+              <div className={`space-y-4 tab-pane-enter ${activeTab === 'all' ? 'pt-2 border-t border-theme-subtle' : ''}`} data-tab-section="header">
                 <div className="flex items-center justify-between">
                   <span className="text-[11px] font-bold text-theme-muted uppercase tracking-wider flex items-center gap-1.5">
                     <FileText className="w-3.5 h-3.5 text-blue-400" />
@@ -867,25 +940,6 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
                   header={formData.header || {}}
                   onChange={handleHeaderChange}
                   fieldConfidences={formData.alan_guvenlikleri || {}}
-                />
-              </div>
-            )}
-
-            {/* Akıcı / Tümü Görünümü veya Yalnızca Kalemler */}
-            {(activeTab === 'all' || activeTab === 'items') && (
-              <div className="space-y-4 pt-2 border-t border-theme-subtle" data-tab-section="items">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold text-theme-muted uppercase tracking-wider flex items-center gap-1.5">
-                    <Package className="w-3.5 h-3.5 text-indigo-400" />
-                    <span>Mal ve Hizmet Kalemleri</span>
-                  </span>
-                  <span className="text-[11px] text-theme-muted font-mono">
-                    Toplam Miktar: <strong className="text-theme-primary">{Number.isFinite(totalCalculatedQty) ? totalCalculatedQty.toLocaleString('tr-TR', { maximumFractionDigits: 2 }) : 0}</strong>
-                  </span>
-                </div>
-                <ItemsTable
-                  items={formData.kalemler || []}
-                  onChange={handleItemsChange}
                 />
               </div>
             )}
@@ -902,13 +956,191 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
               <textarea
                 value={formData.genel_notlar || ''}
                 onChange={(e) => handleNotesChange(e.target.value)}
-                rows={3}
+                rows={2}
                 placeholder="Şoför kaşesi, ambar teslim tutanağı veya ıslak imza notları..."
-                className="w-full bg-theme-card border border-theme-subtle rounded-lg px-3 py-2 text-xs text-theme-primary placeholder-theme-muted focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30 transition-all resize-none"
+                className="w-full bg-theme-card border border-theme-subtle rounded-xl px-3 py-2 text-xs text-theme-primary placeholder-theme-muted focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30 transition-all resize-none"
               />
             </div>
           </div>
+
+          {/* =========================================================================
+              3. MOBİL İÇİN YAPIŞKAN ONAY ÇUBUĞU (Sticky Bottom Thumb Approval Bar)
+              ========================================================================= */}
+          <div className="md:hidden absolute bottom-0 left-0 right-0 p-2.5 bg-theme-surface/95 backdrop-blur-md border-t border-theme-subtle z-20 flex items-center justify-between gap-2.5 shadow-2xl">
+            <div className="flex flex-col min-w-0 pr-1 select-none">
+              <span className="text-[10px] text-theme-muted uppercase font-semibold tracking-wider">
+                {formData.kalemler?.length || 0} Kalem Toplam
+              </span>
+              <span className="text-xs font-bold text-theme-primary font-mono tabular-nums truncate">
+                {totalCalculatedQty.toLocaleString('tr-TR')} Adet
+              </span>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleMobileApproveWithHaptic}
+              disabled={isSaving}
+              className={`flex-1 min-h-[44px] px-4 rounded-xl text-xs font-bold flex items-center justify-center space-x-2 shadow-lg transition-all thumb-approve-btn ${
+                isMathDiscrepancy && cadenceWarning
+                  ? 'bg-amber-600 hover:bg-amber-500 text-white shadow-amber-600/30'
+                  : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/30'
+              }`}
+            >
+              {isSaving ? (
+                <span>Kaydediliyor...</span>
+              ) : isMathDiscrepancy && cadenceWarning ? (
+                <>
+                  <AlertTriangle className="w-4 h-4 text-white shrink-0" />
+                  <span>Yine de Onayla</span>
+                </>
+              ) : (
+                <>
+                  <CheckCheck className="w-4 h-4 stroke-[2.5] shrink-0" />
+                  <span>Onayla & Sonraki</span>
+                </>
+              )}
+            </button>
+          </div>
         </>
+      )}
+
+      {/* =========================================================================
+          MOBİL İŞLEMLER VE ERP SEÇENEKLERİ ACTION SHEET
+          ========================================================================= */}
+      {isMobileActionSheetOpen && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-xs p-0 sm:p-4">
+          <div className="bg-theme-surface border border-theme-subtle rounded-t-2xl sm:rounded-2xl max-w-sm w-full p-4 space-y-3 shadow-2xl animate-in slide-in-from-bottom duration-200">
+            {/* Sheet Başlık */}
+            <div className="flex items-center justify-between border-b border-theme-subtle pb-2.5">
+              <div className="flex items-center space-x-2">
+                <div className="w-7 h-7 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
+                  <MoreHorizontal className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-xs font-bold text-theme-primary">İşlemler & ERP Entegrasyonları</h3>
+                  <p className="text-[10px] text-theme-muted font-mono">{document?.id?.substring(0, 8)}... Evrak İşlemleri</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsMobileActionSheetOpen(false)}
+                className="p-1.5 rounded-lg text-theme-muted hover:text-theme-primary hover:bg-theme-card transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Sheet İşlem Listesi */}
+            <div className="space-y-1.5 py-1">
+              {/* Kurumsal ERP Linter */}
+              {erpLintData && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsMobileActionSheetOpen(false);
+                    setIsErpModalOpen(true);
+                  }}
+                  className="w-full flex items-center justify-between p-2.5 rounded-xl bg-blue-950/30 hover:bg-blue-900/40 border border-blue-500/30 text-blue-300 text-xs font-semibold transition-all"
+                >
+                  <div className="flex items-center space-x-2">
+                    <ShieldCheck className="w-4 h-4 text-blue-400" />
+                    <span>ERP Linter & Şema Doğrulayıcı</span>
+                  </div>
+                  <span className="font-mono text-[10px] font-bold bg-blue-500/20 px-1.5 py-0.5 rounded">
+                    %{Math.round(erpLintData.overall_score || 0)}
+                  </span>
+                </button>
+              )}
+
+              {/* U-ETDS Bakanlık Seferi */}
+              <button
+                type="button"
+                onClick={() => {
+                  setIsMobileActionSheetOpen(false);
+                  handleOpenUetdsModal();
+                }}
+                className="w-full flex items-center space-x-2 p-2.5 rounded-xl bg-theme-card hover:bg-theme-card-hover border border-theme-subtle text-xs font-medium text-theme-primary transition-all text-left"
+              >
+                <Truck className="w-4 h-4 text-blue-400" />
+                <span>U-ETDS Sefer Bildirimi & SOAP XML</span>
+              </button>
+
+              {/* 3-Way PO Eşleştirme */}
+              <button
+                type="button"
+                onClick={() => {
+                  setIsMobileActionSheetOpen(false);
+                  handleOpenPoReconcile();
+                }}
+                className="w-full flex items-center space-x-2 p-2.5 rounded-xl bg-theme-card hover:bg-theme-card-hover border border-theme-subtle text-xs font-medium text-theme-primary transition-all text-left"
+              >
+                <Building2 className="w-4 h-4 text-indigo-400" />
+                <span>3-Way ERP Sipariş Eşleştirme</span>
+              </button>
+
+              {/* ERP JSON Kopyalama */}
+              <button
+                type="button"
+                onClick={() => {
+                  handleCopyErpData();
+                  setIsMobileActionSheetOpen(false);
+                }}
+                className="w-full flex items-center justify-between p-2.5 rounded-xl bg-theme-card hover:bg-theme-card-hover border border-theme-subtle text-xs font-medium text-theme-primary transition-all"
+              >
+                <div className="flex items-center space-x-2">
+                  <Copy className="w-4 h-4 text-blue-400" />
+                  <span>Panoya ERP JSON Kopyala</span>
+                </div>
+                {isCopiedErp && <span className="text-[10px] text-emerald-400 font-bold">Kopyalandı!</span>}
+              </button>
+
+              {/* Dışa Aktarmalar */}
+              <div className="pt-1 border-t border-theme-subtle/60 grid grid-cols-2 gap-1.5">
+                <a
+                  href={documentApi.getSingleExcelUrl(document.id)}
+                  download
+                  onClick={() => setIsMobileActionSheetOpen(false)}
+                  className="flex items-center space-x-1.5 p-2 rounded-lg bg-theme-card hover:bg-theme-card-hover border border-theme-subtle text-[11px] text-theme-primary"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Excel (.xlsx)</span>
+                </a>
+                <a
+                  href={documentApi.getSingleLogoXmlUrl(document.id)}
+                  download
+                  onClick={() => setIsMobileActionSheetOpen(false)}
+                  className="flex items-center space-x-1.5 p-2 rounded-lg bg-theme-card hover:bg-theme-card-hover border border-theme-subtle text-[11px] text-theme-primary"
+                >
+                  <FileCode className="w-3.5 h-3.5 text-blue-400" />
+                  <span>Logo XML (.xml)</span>
+                </a>
+              </div>
+
+              {/* Yeniden Çözümle */}
+              <button
+                type="button"
+                onClick={() => {
+                  setIsMobileActionSheetOpen(false);
+                  onProcessDocument(document.id);
+                }}
+                disabled={isProcessing}
+                className="w-full flex items-center space-x-2 p-2.5 rounded-xl bg-theme-card hover:bg-theme-card-hover border border-theme-subtle text-xs font-medium text-theme-primary transition-all text-left"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isProcessing ? 'animate-spin text-blue-400' : 'text-theme-muted'}`} />
+                <span>Evrakı Yeniden Çözümle</span>
+              </button>
+            </div>
+
+            {/* Kapat Butonu */}
+            <button
+              type="button"
+              onClick={() => setIsMobileActionSheetOpen(false)}
+              className="w-full py-2.5 rounded-xl bg-theme-card border border-theme-subtle text-xs font-semibold text-theme-secondary hover:text-theme-primary transition-all"
+            >
+              Kapat
+            </button>
+          </div>
+        </div>
       )}
 
       {/* 3-Way PO ERP Reconciliation Modal */}
