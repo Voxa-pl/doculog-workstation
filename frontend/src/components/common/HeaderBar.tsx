@@ -17,7 +17,8 @@ import {
   Menu,
   X,
   HardDriveDownload,
-  Key
+  Key,
+  Download
 } from 'lucide-react';
 import { BatchSummary, ApiKeyStatus, AppTheme, AppView } from '../../types/irsaliye';
 import { documentApi, systemApi } from '../../services/api';
@@ -180,9 +181,10 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
             }}
             disabled={totalCompleted === 0}
             className="flex items-center space-x-1 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold shadow-sm tactile-btn-emerald"
+            title="Dışa aktarma ve indirme seçenekleri (Excel, XML, JSON, Veritabanı Yedeği)"
           >
-            <FileSpreadsheet className="w-3.5 h-3.5" />
-            <span className="hidden md:inline">Excel İndir</span>
+            <Download className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">İndir</span>
             <ChevronDown className="w-3 h-3 text-emerald-200" />
           </button>
 
