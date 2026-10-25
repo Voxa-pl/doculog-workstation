@@ -152,27 +152,24 @@ export const ViewerToolbar: React.FC<ViewerToolbarProps> = ({
           <button
             type="button"
             onClick={onRotateCounterClockwise}
-            disabled={isSavingRotation}
-            className="p-1 min-w-[26px] min-h-[26px] flex items-center justify-center text-theme-secondary hover:text-theme-primary hover:bg-theme-card-hover disabled:opacity-50 rounded transition-colors"
+            className="p-1 min-w-[26px] min-h-[26px] flex items-center justify-center text-theme-secondary hover:text-theme-primary hover:bg-theme-card-hover rounded transition-colors active:scale-90"
             title="Sola 90° Döndür"
             aria-label="Sola 90° Döndür"
           >
             <RotateCcw className="w-3.5 h-3.5" />
           </button>
 
-          <span className="font-mono text-[11px] text-theme-secondary px-1 min-w-[32px] text-center whitespace-nowrap flex items-center justify-center tabular-nums">
-            {isSavingRotation ? (
-              <RefreshCw className="w-3 h-3 text-blue-400 animate-spin" />
-            ) : (
-              `${safeRotation}°`
+          <span className="font-mono text-[11px] text-theme-secondary px-1 min-w-[32px] text-center whitespace-nowrap flex items-center justify-center tabular-nums gap-0.5">
+            <span>{safeRotation}°</span>
+            {isSavingRotation && (
+              <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse shrink-0" title="Diske kaydediliyor" />
             )}
           </span>
 
           <button
             type="button"
             onClick={onRotateClockwise}
-            disabled={isSavingRotation}
-            className="p-1 min-w-[26px] min-h-[26px] flex items-center justify-center text-theme-secondary hover:text-theme-primary hover:bg-theme-card-hover disabled:opacity-50 rounded transition-colors"
+            className="p-1 min-w-[26px] min-h-[26px] flex items-center justify-center text-theme-secondary hover:text-theme-primary hover:bg-theme-card-hover rounded transition-colors active:scale-90"
             title="Sağa 90° Döndür (R)"
             aria-label="Sağa 90° Döndür"
           >

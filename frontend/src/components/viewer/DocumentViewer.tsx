@@ -33,7 +33,6 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [isSavingRotation, setIsSavingRotation] = useState(false);
   const [isDeskewing, setIsDeskewing] = useState(false);
-  const [isHandingOff, setIsHandingOff] = useState(false);
   const [activePageIndex, setActivePageIndex] = useState(0);
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -41,6 +40,10 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
   const fitZoomRef = useRef<number>(1);
   const rotationRef = useRef<number>(0);
   rotationRef.current = rotation;
+
+  const prevDocIdRef = useRef<string | null>(null);
+  const pendingDeltaRef = useRef<number>(0);
+  const persistTimeoutRef = useRef<number | null>(null);
 
   // Multi-touch gestures ref
   const touchStartRef = useRef<{
@@ -74,10 +77,9 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
     const rect = containerRef.current.getBoundingClientRect();
     if (rect.width <= 0 || rect.height <= 0) return;
 
-    // Mobile safe paddings: 16px horizontal, 64px vertical to clear toolbar/pill
     const isMobile = rect.width < 640;
     const paddingX = isMobile ? 16 : 40;
-    const paddingY = isMobile ? 64 : 56;
+    const paddingY = isMobile ? 40 : 40;
 
     const containerWidth = Math.max(rect.width - paddingX, 40);
     const containerHeight = Math.max(rect.height - paddingY, 40);
@@ -86,13 +88,13 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
     const imgNaturalHeight = imageRef.current.naturalHeight || 1100;
 
     const currentRot = overrideRotation !== undefined ? overrideRotation : rotationRef.current;
-    const isRotated90 = (Math.abs(currentRot) % 180) !== 0;
+    const normalizedRot = ((Math.round(currentRot) % 360) + 360) % 360;
+    const isRotated90 = normalizedRot === 90 || normalizedRot === 270;
     const effectiveWidth = isRotated90 ? imgNaturalHeight : imgNaturalWidth;
     const effectiveHeight = isRotated90 ? imgNaturalWidth : imgNaturalHeight;
 
     const scaleX = effectiveWidth > 0 ? containerWidth / effectiveWidth : 1;
     const scaleY = effectiveHeight > 0 ? containerHeight / effectiveHeight : 1;
-    // Fit image cleanly within the container bounds without premature clamping
     const rawFit = Math.min(scaleX, scaleY);
     const fitScale = Number.isFinite(rawFit) && rawFit > 0 ? rawFit : 1;
 
@@ -101,7 +103,7 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
     setPan({ x: 0, y: 0 });
   }, []);
 
-  // Recalculate fit on container resize or orientation change
+  // Recalculate fit on container resize
   useEffect(() => {
     if (!containerRef.current) return;
     const ro = new ResizeObserver(() => {
@@ -111,22 +113,79 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
     return () => ro.disconnect();
   }, [handleFitToScreen]);
 
+  // Flush pending rotation to backend disk
+  const flushPendingRotation = useCallback(async () => {
+    if (persistTimeoutRef.current) {
+      clearTimeout(persistTimeoutRef.current);
+      persistTimeoutRef.current = null;
+    }
+
+    const delta = pendingDeltaRef.current;
+    if (!delta || delta % 360 === 0) {
+      pendingDeltaRef.current = 0;
+      return;
+    }
+
+    let netDelta = ((delta % 360) + 360) % 360;
+    if (netDelta === 270) netDelta = -90;
+    if (netDelta === 0) {
+      pendingDeltaRef.current = 0;
+      return;
+    }
+
+    pendingDeltaRef.current = 0;
+    setIsSavingRotation(true);
+    try {
+      await onRotatePersist(netDelta, activePageIndex);
+    } catch (err) {
+      console.error('Rotasyon kaydetme hatası:', err);
+      pendingDeltaRef.current += netDelta;
+    } finally {
+      setIsSavingRotation(false);
+    }
+  }, [onRotatePersist, activePageIndex]);
+
+  // Clean up timer on unmount
+  useEffect(() => {
+    return () => {
+      if (persistTimeoutRef.current) {
+        clearTimeout(persistTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Belge değişimi denetimi: Yalnızca farklı bir belgeye geçildiğinde görünümü sıfırla
   useEffect(() => {
     if (document) {
-      setRotation(0);
-      rotationRef.current = 0;
-      setActivePageIndex(0);
-      setPan({ x: 0, y: 0 });
-      if (document.guncellenme_ts) {
-        setImageVersion(document.guncellenme_ts);
-      } else {
-        setImageVersion(Date.now());
-      }
-      if (imageRef.current?.complete && imageRef.current.naturalWidth > 0) {
-        handleFitToScreen(0);
+      const isNewDoc = document.id !== prevDocIdRef.current;
+      if (isNewDoc) {
+        if (pendingDeltaRef.current && pendingDeltaRef.current % 360 !== 0) {
+          flushPendingRotation();
+        }
+        prevDocIdRef.current = document.id;
+        setRotation(0);
+        rotationRef.current = 0;
+        setActivePageIndex(0);
+        setPan({ x: 0, y: 0 });
+        pendingDeltaRef.current = 0;
+        setImageVersion(document.guncellenme_ts || Date.now());
+        if (imageRef.current?.complete && imageRef.current.naturalWidth > 0) {
+          handleFitToScreen(0);
+        }
       }
     }
-  }, [document?.id, document?.guncellenme_ts, handleFitToScreen]);
+  }, [document?.id, flushPendingRotation, handleFitToScreen]);
+
+  // Sayfa değiştirme işleyicisi (Çok sayfalı irsaliyeler için)
+  const handlePageChange = async (newPageIndex: number) => {
+    if (newPageIndex === activePageIndex) return;
+    await flushPendingRotation();
+    setActivePageIndex(newPageIndex);
+    setRotation(0);
+    rotationRef.current = 0;
+    setPan({ x: 0, y: 0 });
+    setTimeout(() => handleFitToScreen(0), 40);
+  };
 
   useEffect(() => {
     if (onZoomChange) {
@@ -152,59 +211,27 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
     }
   };
 
-  const handleRotate = async (deltaDegrees: number) => {
-    if (!document || isSavingRotation) return;
+  const handleRotate = (deltaDegrees: number) => {
+    if (!document) return;
 
-    setIsSavingRotation(true);
+    // 1. Sürekli ve kesintisiz ileri rotasyon (asla geriye sarmaz, zıplamaz)
+    const nextRotation = rotation + deltaDegrees;
+    setRotation(nextRotation);
+    rotationRef.current = nextRotation;
 
-    // 1. Optimistic CSS rotasyonu: Anında dönme ve ekran sığdırma
-    const newCssRotation = (rotation + deltaDegrees + 360) % 360;
-    setRotation(newCssRotation);
-    rotationRef.current = newCssRotation;
-    handleFitToScreen(newCssRotation);
+    // 2. Yeni yönelime göre ekran sığdırmayı eşzamanlı dönüştür (tek GPU transform animasyonu)
+    handleFitToScreen(nextRotation);
 
-    try {
-      // 2. Backend Pillow ile diske kaydetme
-      await onRotatePersist(deltaDegrees, activePageIndex);
+    // 3. Arka plan disk kaydı için açıyı biriktir
+    pendingDeltaRef.current += deltaDegrees;
 
-      // 3. Cache-buster zaman damgalı URL
-      const nextVersion = Date.now();
-      const baseRawUrl = pages[activePageIndex] || document.dosya_url;
-      const sep = baseRawUrl.includes('?') ? '&' : '?';
-      const cacheBustedUrl = `${baseRawUrl}${sep}t=${nextVersion}`;
-
-      // 4. Görseli arkaplanda önbelleğe al (Flash/Snap-back engelleme)
-      await new Promise<void>((resolve) => {
-        const preloadImg = new window.Image();
-        preloadImg.onload = () => resolve();
-        preloadImg.onerror = () => resolve();
-        preloadImg.src = cacheBustedUrl;
-      });
-
-      // 5. Kesintisiz geçiş (Handoff):
-      // Yeni fiziksel görsel zaten diske döndürülmüş olduğundan, CSS açısını sıfırlarken
-      // transition animasyonunu anlık olarak kapatıp görseli takas ediyoruz.
-      setIsHandingOff(true);
-      const normalizedRotation = (newCssRotation - deltaDegrees + 360) % 360;
-      setRotation(normalizedRotation);
-      rotationRef.current = normalizedRotation;
-      setImageVersion(nextVersion);
-
-      // 6. Yeni boyutlara göre ekran sığdırmayı otomatik güncelle
-      requestAnimationFrame(() => {
-        setIsHandingOff(false);
-        handleFitToScreen(normalizedRotation);
-      });
-    } catch (err) {
-      console.error('Döndürme hatası:', err);
-      // Hata durumunda optimistik rotasyonu geri al
-      const reverted = (rotation - deltaDegrees + 360) % 360;
-      setRotation(reverted);
-      rotationRef.current = reverted;
-      handleFitToScreen(reverted);
-    } finally {
-      setIsSavingRotation(false);
+    // 4. 600ms debounce ile kullanıcı döndürmeyi bitirince diske yaz
+    if (persistTimeoutRef.current) {
+      clearTimeout(persistTimeoutRef.current);
     }
+    persistTimeoutRef.current = window.setTimeout(() => {
+      flushPendingRotation();
+    }, 600);
   };
 
   const handleRotateClockwise = () => handleRotate(90);
@@ -214,6 +241,7 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
     if (!document || isDeskewing) return;
     setIsDeskewing(true);
     try {
+      await flushPendingRotation();
       await documentApi.deskewDocument(document.id);
       const nextVersion = Date.now();
       setImageVersion(nextVersion);
@@ -408,7 +436,7 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleFitToScreen, rotation, isSavingRotation]);
+  }, [handleFitToScreen, rotation]);
 
   const safePanX = Number.isFinite(pan.x) ? pan.x : 0;
   const safePanY = Number.isFinite(pan.y) ? pan.y : 0;
@@ -422,8 +450,8 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
           fileName={document.dosya_adi}
           activePageIndex={activePageIndex}
           totalPages={pages.length}
-          onPrevPage={() => setActivePageIndex((p) => Math.max(0, p - 1))}
-          onNextPage={() => setActivePageIndex((p) => Math.min(pages.length - 1, p + 1))}
+          onPrevPage={() => handlePageChange(Math.max(0, activePageIndex - 1))}
+          onNextPage={() => handlePageChange(Math.min(pages.length - 1, activePageIndex + 1))}
           zoom={safeZoom}
           rotation={safeRotation}
           contrastBoost={contrastBoost}
@@ -472,7 +500,7 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
             <div
               className={`select-none will-change-transform flex items-center justify-center pointer-events-auto relative ${
-                isHandingOff || isDragging ? 'viewer-canvas-direct' : 'viewer-canvas-smooth'
+                isDragging ? 'viewer-canvas-direct' : 'viewer-canvas-smooth'
               }`}
               style={{
                 transform: `translate3d(${safePanX}px, ${safePanY}px, 0) scale(${safeZoom}) rotate(${safeRotation}deg)`,
