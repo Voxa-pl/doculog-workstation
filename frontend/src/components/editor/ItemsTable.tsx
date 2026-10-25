@@ -230,16 +230,16 @@ export const ItemsTable: React.FC<ItemsTableProps> = ({ items, onChange }) => {
 
       {/* 2. MASAÜSTÜ GÖRÜNÜM: Tam Tablo (Desktop Spreadsheet) */}
       <div className="hidden md:block border border-theme-subtle rounded-lg overflow-hidden bg-theme-card/60 shadow-sm">
-        <div className="overflow-x-auto overscroll-x-contain">
-          <table className="w-full min-w-[500px] text-left text-xs border-collapse">
+        <div className="w-full">
+          <table className="w-full text-left text-xs border-collapse table-fixed">
             <thead>
               <tr className="bg-theme-surface border-b border-theme-subtle text-[10px] text-theme-muted uppercase tracking-wider font-mono">
-                <th className="py-2.5 px-2 text-center w-10">No</th>
-                <th className="py-2.5 px-2">Mal / Malzeme Cinsi ve Açıklaması</th>
-                <th className="py-2.5 px-2 text-right w-24">Miktar</th>
-                <th className="py-2.5 px-2 text-center w-24">Birim</th>
-                <th className="py-2.5 px-2 w-28">Notlar</th>
-                <th className="py-2.5 px-1 text-center w-8"></th>
+                <th className="py-2 px-1 text-center w-8">No</th>
+                <th className="py-2 px-2">Mal / Malzeme Cinsi</th>
+                <th className="py-2 px-1.5 text-right w-20">Miktar</th>
+                <th className="py-2 px-1 text-center w-16">Birim</th>
+                <th className="py-2 px-1.5 w-20">Notlar</th>
+                <th className="py-2 px-1 text-center w-7"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-theme-subtle">
@@ -255,21 +255,21 @@ export const ItemsTable: React.FC<ItemsTableProps> = ({ items, onChange }) => {
                     key={index}
                     className="hover:bg-theme-surface/70 transition-colors group"
                   >
-                    <td className="py-1.5 px-1 text-center text-theme-muted font-mono text-[11px] tabular-nums">
+                    <td className="py-1 px-1 text-center text-theme-muted font-mono text-[11px] tabular-nums w-8">
                       {item.sira_no || index + 1}
                     </td>
 
-                    <td className="py-1 px-1.5 min-w-[160px]">
+                    <td className="py-1 px-1.5 min-w-0">
                       <input
                         type="text"
                         value={item.mal_hizmet ?? ''}
                         onChange={(e) => handleItemChange(index, 'mal_hizmet', e.target.value)}
                         placeholder="Ürün / Mal tanımı..."
-                        className="w-full bg-transparent hover:bg-theme-surface/80 focus:bg-theme-surface border border-transparent focus:border-blue-500 rounded px-2 py-1 text-theme-primary text-xs sm:text-sm focus:outline-none transition-colors min-h-[32px]"
+                        className="w-full bg-transparent hover:bg-theme-surface/80 focus:bg-theme-surface border border-transparent focus:border-blue-500 rounded px-1.5 py-1 text-theme-primary text-xs focus:outline-none transition-colors min-h-[30px] truncate"
                       />
                     </td>
 
-                    <td className="py-1 px-1.5 text-right w-24">
+                    <td className="py-1 px-1 text-right w-20">
                       <input
                         type="text"
                         inputMode="decimal"
@@ -288,17 +288,17 @@ export const ItemsTable: React.FC<ItemsTableProps> = ({ items, onChange }) => {
                           }
                         }}
                         placeholder="0"
-                        className="w-full text-right bg-transparent hover:bg-theme-surface/80 focus:bg-theme-surface border border-transparent focus:border-blue-500 rounded px-2 py-1 text-theme-primary font-mono tabular-nums text-xs sm:text-sm focus:outline-none transition-colors min-h-[32px]"
+                        className="w-full text-right bg-transparent hover:bg-theme-surface/80 focus:bg-theme-surface border border-transparent focus:border-blue-500 rounded px-1.5 py-1 text-theme-primary font-mono tabular-nums text-xs font-semibold focus:outline-none transition-colors min-h-[30px]"
                       />
                     </td>
 
-                    <td className="py-1 px-1.5 text-center w-24">
+                    <td className="py-1 px-1 text-center w-16">
                       <input
                         list={`units-desktop-${index}`}
                         type="text"
                         value={item.birim || 'Adet'}
                         onChange={(e) => handleItemChange(index, 'birim', e.target.value)}
-                        className="w-full text-center bg-transparent hover:bg-theme-surface/80 focus:bg-theme-surface border border-transparent focus:border-blue-500 rounded px-1.5 py-1 text-theme-primary text-xs sm:text-sm focus:outline-none transition-colors min-h-[32px]"
+                        className="w-full text-center bg-transparent hover:bg-theme-surface/80 focus:bg-theme-surface border border-transparent focus:border-blue-500 rounded px-1 py-1 text-theme-primary text-xs focus:outline-none transition-colors min-h-[30px]"
                       />
                       <datalist id={`units-desktop-${index}`}>
                         {COMMON_UNITS.map((u) => (
@@ -307,21 +307,21 @@ export const ItemsTable: React.FC<ItemsTableProps> = ({ items, onChange }) => {
                       </datalist>
                     </td>
 
-                    <td className="py-1 px-1.5 w-28">
+                    <td className="py-1 px-1.5 w-20">
                       <input
                         type="text"
                         value={item.notlar || ''}
                         onChange={(e) => handleItemChange(index, 'notlar', e.target.value)}
-                        placeholder="Lot / fire notu..."
-                        className="w-full bg-transparent hover:bg-theme-surface/80 focus:bg-theme-surface border border-transparent focus:border-blue-500 rounded px-2 py-1 text-theme-secondary text-xs sm:text-sm focus:outline-none transition-colors placeholder-theme-muted min-h-[32px]"
+                        placeholder="Not..."
+                        className="w-full bg-transparent hover:bg-theme-surface/80 focus:bg-theme-surface border border-transparent focus:border-blue-500 rounded px-1.5 py-1 text-theme-secondary text-xs focus:outline-none transition-colors placeholder-theme-muted min-h-[30px] truncate"
                       />
                     </td>
 
-                    <td className="py-1 px-1 text-center w-8">
+                    <td className="py-1 px-0.5 text-center w-7">
                       <button
                         type="button"
                         onClick={() => handleRemoveItem(index)}
-                        className="opacity-40 hover:opacity-100 text-theme-muted hover:text-rose-400 min-w-[30px] min-h-[30px] flex items-center justify-center p-1 rounded transition-all active:scale-95"
+                        className="opacity-20 group-hover:opacity-100 text-theme-muted hover:text-rose-400 w-6 h-6 flex items-center justify-center p-0.5 rounded transition-all active:scale-95 mx-auto"
                         title="Satırı Sil"
                       >
                         <Trash2 className="w-3.5 h-3.5" />

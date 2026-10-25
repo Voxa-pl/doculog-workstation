@@ -93,8 +93,8 @@ export const HeaderForm: React.FC<HeaderFormProps> = ({
 
     return {
       borderClass: 'border-theme-subtle focus:border-blue-500',
-      badgeClass: 'text-emerald-400/80 bg-emerald-500/10 border-emerald-500/20',
-      text: conf !== undefined ? `%${Math.round(conf * 100)}` : null,
+      badgeClass: '',
+      text: null,
       isSuspicious: false
     };
   };
@@ -266,8 +266,8 @@ export const HeaderForm: React.FC<HeaderFormProps> = ({
       <div className="hidden md:block space-y-3.5">
         {/* 1. İrsaliye ve Tarih */}
         <div className="bg-theme-card/60 border border-theme-subtle rounded-lg p-3 space-y-2.5 min-w-0">
-          <div className="flex items-center space-x-1.5 text-blue-400 font-semibold uppercase text-[11px] tracking-wider">
-            <Hash className="w-3.5 h-3.5 shrink-0" />
+          <div className="flex items-center space-x-1.5 text-theme-primary font-semibold uppercase text-[11px] tracking-wider">
+            <Hash className="w-3.5 h-3.5 text-blue-400 shrink-0" />
             <span>İrsaliye ve Tarih Bilgileri</span>
           </div>
 
@@ -281,8 +281,8 @@ export const HeaderForm: React.FC<HeaderFormProps> = ({
                 <label className="text-[10px] text-theme-muted font-medium truncate block min-w-0">
                   Fiili Sevk Tarihi / Saati
                 </label>
-                {sevkTarihiConf !== undefined && (
-                  <span className="text-[9px] font-mono px-1 py-0.2 rounded border text-theme-muted bg-theme-card border-theme-subtle shrink-0">
+                {sevkTarihiConf !== undefined && sevkTarihiConf < 0.8 && (
+                  <span className="text-[9px] font-mono px-1 py-0.2 rounded border text-amber-400 bg-amber-500/10 border-amber-500/20 shrink-0">
                     %{Math.round(sevkTarihiConf * 100)}
                   </span>
                 )}
@@ -311,8 +311,8 @@ export const HeaderForm: React.FC<HeaderFormProps> = ({
 
         {/* 2. Gönderici */}
         <div className="bg-theme-card/60 border border-theme-subtle rounded-lg p-3 space-y-2 min-w-0">
-          <div className="flex items-center space-x-1.5 text-emerald-400 font-semibold uppercase text-[11px] tracking-wider">
-            <Building2 className="w-3.5 h-3.5 shrink-0" />
+          <div className="flex items-center space-x-1.5 text-theme-primary font-semibold uppercase text-[11px] tracking-wider">
+            <Building2 className="w-3.5 h-3.5 text-blue-400 shrink-0" />
             <span>Gönderici (Çıkış Noktası / Satıcı)</span>
           </div>
 
@@ -328,8 +328,8 @@ export const HeaderForm: React.FC<HeaderFormProps> = ({
 
         {/* 3. Alıcı */}
         <div className="bg-theme-card/60 border border-theme-subtle rounded-lg p-3 space-y-2 min-w-0">
-          <div className="flex items-center space-x-1.5 text-amber-400 font-semibold uppercase text-[11px] tracking-wider">
-            <MapPin className="w-3.5 h-3.5 shrink-0" />
+          <div className="flex items-center space-x-1.5 text-theme-primary font-semibold uppercase text-[11px] tracking-wider">
+            <MapPin className="w-3.5 h-3.5 text-blue-400 shrink-0" />
             <span>Alıcı (Varış / Teslimat Cari)</span>
           </div>
 
@@ -345,8 +345,8 @@ export const HeaderForm: React.FC<HeaderFormProps> = ({
 
         {/* 4. Nakliye ve Lojistik */}
         <div className="bg-theme-card/60 border border-theme-subtle rounded-lg p-3 space-y-2 min-w-0">
-          <div className="flex items-center space-x-1.5 text-purple-400 font-semibold uppercase text-[11px] tracking-wider">
-            <Truck className="w-3.5 h-3.5 shrink-0" />
+          <div className="flex items-center space-x-1.5 text-theme-primary font-semibold uppercase text-[11px] tracking-wider">
+            <Truck className="w-3.5 h-3.5 text-blue-400 shrink-0" />
             <span>Taşıyıcı, Plaka ve Şoför</span>
           </div>
 

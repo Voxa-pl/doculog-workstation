@@ -87,6 +87,7 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
   const [isSaving, setIsSaving] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
+  const [isActionsMenuOpen, setIsActionsMenuOpen] = useState(false);
   const [isMobileActionSheetOpen, setIsMobileActionSheetOpen] = useState(false);
   const [isCopiedErp, setIsCopiedErp] = useState(false);
   const [cadenceWarning, setCadenceWarning] = useState(false);
@@ -106,6 +107,7 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
   const [isCopiedSnippet, setIsCopiedSnippet] = useState(false);
   const [suspiciousCount, setSuspiciousCount] = useState(0);
   const exportMenuRef = useRef<HTMLDivElement>(null);
+  const actionsMenuRef = useRef<HTMLDivElement>(null);
   const jumpTimerRef = useRef<number | null>(null);
   const suspiciousTimerRef = useRef<number | null>(null);
   const cadenceTimerRef = useRef<number | null>(null);
@@ -270,6 +272,9 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
+      if (actionsMenuRef.current && !actionsMenuRef.current.contains(e.target as Node)) {
+        setIsActionsMenuOpen(false);
+      }
       if (exportMenuRef.current && !exportMenuRef.current.contains(e.target as Node)) {
         setIsExportMenuOpen(false);
       }
@@ -280,45 +285,62 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
 
   if (!document) {
     return (
-      <aside className="w-full md:w-80 lg:w-[420px] xl:w-[480px] h-full bg-theme-surface border-l border-theme-subtle flex flex-col shrink-0 p-6 items-center justify-center text-center select-none overflow-hidden">
-        <div className="w-16 h-16 rounded-2xl bg-theme-card border border-theme-subtle flex items-center justify-center mb-3 text-theme-muted">
-          <FileText className="w-8 h-8 stroke-[1.5]" />
+      <aside className="w-full h-full bg-theme-surface border-l border-theme-subtle flex flex-col shrink-0 select-none overflow-hidden min-w-0">
+        <header className="h-12 border-b border-theme-subtle bg-theme-surface/95 px-4 flex items-center shrink-0">
+          <span className="text-xs font-bold text-theme-muted uppercase tracking-wider">
+            Doğrulama İstasyonu
+          </span>
+        </header>
+        <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
+          <div className="w-16 h-16 rounded-2xl bg-theme-card border border-theme-subtle flex items-center justify-center mb-3 text-theme-muted">
+            <FileText className="w-8 h-8 stroke-[1.5]" />
+          </div>
+          <h3 className="text-sm font-semibold text-theme-primary">Belge Seçilmedi</h3>
+          <p className="text-xs text-theme-muted mt-1 max-w-[240px]">Sol kuyruktan incelemek istediğiniz bir irsaliyeyi seçin.</p>
         </div>
-        <h3 className="text-sm font-semibold text-theme-primary">Belge Seçilmedi</h3>
-        <p className="text-xs text-theme-muted mt-1 max-w-[240px]">Sol kuyruktan incelemek istediğiniz bir irsaliyeyi seçin.</p>
       </aside>
     );
   }
 
   if (!formData || document.durum === 'kuyrukta') {
     return (
-      <aside className="w-full md:w-80 lg:w-[420px] xl:w-[480px] h-full bg-theme-surface border-l border-theme-subtle flex flex-col shrink-0 p-6 items-center justify-center text-center select-none overflow-hidden">
-        <div className="w-16 h-16 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center mb-3 text-blue-400">
-          <Sparkles className="w-8 h-8 stroke-[1.5] animate-pulse" />
-        </div>
-        <h3 className="text-sm font-semibold text-theme-primary">Ayrıştırma Bekliyor</h3>
-        <p className="text-xs text-theme-muted mt-1 max-w-[280px]">
-          Otomatik optik ayrıştırma motoru ile irsaliye başlıklarını, adresleri ve ürün kalemlerini tek tıkla aktarın.
-        </p>
+      <aside className="w-full h-full bg-theme-surface border-l border-theme-subtle flex flex-col shrink-0 select-none overflow-hidden min-w-0">
+        <header className="h-12 border-b border-theme-subtle bg-theme-surface/95 px-4 flex items-center justify-between shrink-0">
+          <span className="text-xs font-bold text-theme-primary uppercase tracking-wider truncate">
+            {document.dosya_adi}
+          </span>
+          <span className="text-[10px] text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded font-medium">
+            Kuyrukta
+          </span>
+        </header>
+        <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
+          <div className="w-16 h-16 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center mb-3 text-blue-400">
+            <Sparkles className="w-8 h-8 stroke-[1.5] animate-pulse" />
+          </div>
+          <h3 className="text-sm font-semibold text-theme-primary">Ayrıştırma Bekliyor</h3>
+          <p className="text-xs text-theme-muted mt-1 max-w-[280px]">
+            Otomatik optik ayrıştırma motoru ile irsaliye başlıklarını, adresleri ve ürün kalemlerini tek tıkla aktarın.
+          </p>
 
-        <button
-          type="button"
-          onClick={() => onProcessDocument(document.id)}
-          disabled={isProcessing}
-          className="mt-5 flex items-center space-x-2 craft-button-primary disabled:opacity-50 text-white px-5 py-2.5 rounded-lg text-xs sm:text-sm font-semibold transition-all active:scale-95 min-h-[40px]"
-        >
-          {isProcessing ? (
-            <>
-              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              <span>Belge Çözümleniyor...</span>
-            </>
-          ) : (
-            <>
-              <Sparkles className="w-4 h-4" />
-              <span>Evrakı Otomatik Çözümle</span>
-            </>
-          )}
-        </button>
+          <button
+            type="button"
+            onClick={() => onProcessDocument(document.id)}
+            disabled={isProcessing}
+            className="mt-5 flex items-center space-x-2 craft-button-primary disabled:opacity-50 text-white px-5 py-2.5 rounded-lg text-xs sm:text-sm font-semibold transition-all active:scale-95 min-h-[40px]"
+          >
+            {isProcessing ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                <span>Belge Çözümleniyor...</span>
+              </>
+            ) : (
+              <>
+                <Sparkles className="w-4 h-4" />
+                <span>Evrakı Otomatik Çözümle</span>
+              </>
+            )}
+          </button>
+        </div>
       </aside>
     );
   }
@@ -468,270 +490,221 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
   };
 
   return (
-    <aside className="w-full md:w-80 lg:w-[420px] xl:w-[480px] h-full bg-theme-surface border-l border-theme-subtle flex flex-col shrink-0 select-none overflow-hidden relative">
+    <aside className="w-full h-full bg-theme-surface border-l border-theme-subtle flex flex-col shrink-0 select-none overflow-hidden relative min-w-0">
       {/* =========================================================================
-          ÜST ÇUBUK: MOBİL İÇİN YALINLAŞTIRILMIŞ (44px) / MASAÜSTÜ İÇİN TAM ARAÇ ÇUBUĞU
+          48px SABİT DATUM ÜST KOMUTA ÇUBUĞU (Apple Pro / Linear Command Strip)
           ========================================================================= */}
-      
-      {/* 1. MOBİL ÜST ÇUBUK (block md:hidden) */}
-      <div className="flex md:hidden p-3 border-b border-theme-subtle bg-theme-surface/95 backdrop-blur items-center justify-between gap-2 shrink-0">
+      <header className="h-12 border-b border-theme-subtle bg-theme-surface/95 px-3 sm:px-4 flex items-center justify-between shrink-0 min-w-0 gap-2">
+        {/* Sol: İrsaliye No + GİB Rozeti + Kaydedilmemiş Değişiklik Göstergesi */}
         <div className="flex items-center space-x-2 min-w-0">
           <span className="text-xs font-bold text-theme-primary uppercase tracking-wider truncate">
             {formData.header?.irsaliye_no ? `İrsaliye: ${formData.header.irsaliye_no}` : 'Doğrulama İstasyonu'}
           </span>
           {gibQrData?.is_gib_verified && (
-            <span className="inline-flex items-center h-4.5 bg-emerald-950/40 border border-emerald-500/25 rounded px-1 text-[9px] font-bold text-emerald-300 uppercase tracking-wider shrink-0">
-              GİB Mühürlü
+            <span 
+              className="inline-flex items-center h-5 bg-emerald-950/40 border border-emerald-500/25 rounded px-1.5 text-[9px] font-bold text-emerald-300 uppercase tracking-wider shrink-0 gap-1"
+              title={gibQrData.message}
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)]" />
+              <span>GİB Mühürlü</span>
+              {gibQrData.ettn && (
+                <span className="font-mono text-[9px] text-emerald-400/80 hidden xl:inline">
+                  {gibQrData.ettn.substring(0, 8)}...
+                </span>
+              )}
             </span>
           )}
           {isNonInvoice && (
-            <span className="inline-flex items-center h-4.5 bg-rose-500/10 border border-rose-500/20 rounded px-1.5 text-[9px] font-bold text-rose-400 shrink-0">
+            <span className="inline-flex items-center h-5 bg-rose-500/10 border border-rose-500/20 rounded px-1.5 text-[9px] font-bold text-rose-400 uppercase tracking-wider shrink-0">
               İrsaliye Dışı
             </span>
           )}
+          {hasUnsavedChanges && (
+            <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" title="Kaydedilmemiş değişiklikler var" />
+          )}
         </div>
 
+        {/* Sağ: Aksiyon Butonları & Konsolide İşlemler Menüsü */}
         <div className="flex items-center space-x-1.5 shrink-0">
+          {/* Masaüstü Birincil CTA (Onayla veya Reddet) */}
+          <div className="hidden md:flex items-center space-x-1.5">
+            {isNonInvoice ? (
+              onDeleteDoc && (
+                <button
+                  type="button"
+                  onClick={() => onDeleteDoc(document.id)}
+                  className="flex items-center space-x-1 bg-rose-600 hover:bg-rose-500 text-white px-2.5 py-1 min-h-[30px] rounded-md text-xs font-bold shadow-xs truncate tactile-btn"
+                  title="İrsaliye dışı görseli kuyruktan sil ve sonrakine geç (Delete)"
+                >
+                  <Trash2 className="w-3.5 h-3.5 shrink-0" />
+                  <span>Kuyruktan Çıkar</span>
+                  <span className="text-[10px] text-rose-200/80 font-mono hidden xl:inline">(Del)</span>
+                </button>
+              )
+            ) : (
+              <button
+                type="button"
+                onClick={() => handleApproveAndNext(false)}
+                disabled={isSaving}
+                className="flex items-center space-x-1.5 bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1 min-h-[30px] rounded-md text-xs font-bold shadow-xs truncate tactile-btn-emerald active:scale-95 transition-all"
+                title="Verileri onayla ve bir sonraki irsaliyeye geç (Ctrl+Enter)"
+              >
+                <CheckCheck className="w-3.5 h-3.5 stroke-[2.5] shrink-0" />
+                <span>Onayla & Sonraki</span>
+                <span className="text-[10px] text-emerald-200/80 font-mono hidden xl:inline">(Ctrl+↵)</span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={() => onProcessDocument(document.id)}
+              disabled={isProcessing}
+              className="p-1 min-w-[30px] min-h-[30px] flex items-center justify-center bg-theme-card hover:bg-theme-card-hover text-theme-secondary hover:text-theme-primary rounded-md border border-theme-subtle shrink-0 transition-colors"
+              title="Belgeyi Yeniden Çözümle"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isProcessing ? 'animate-spin text-blue-400' : ''}`} />
+            </button>
+          </div>
+
+          {/* Hızlı Kaydet (Eğer Değişiklik Varsa) */}
           {hasUnsavedChanges && (
             <button
               type="button"
               onClick={() => handleSaveChanges()}
               disabled={isSaving}
-              className="p-1.5 rounded-lg bg-blue-600 text-white min-w-[32px] min-h-[32px] flex items-center justify-center shadow-xs active:scale-95 transition-all"
-              title="Değişiklikleri Kaydet"
+              className="p-1 min-w-[30px] min-h-[30px] flex items-center justify-center bg-blue-600 hover:bg-blue-500 text-white rounded-md text-xs shadow-xs shrink-0 transition-colors"
+              title="Değişiklikleri Kaydet (Ctrl+S)"
             >
               <Save className="w-3.5 h-3.5" />
             </button>
           )}
 
-          {/* Mobilde Tüm ERP & İhracat & Araçları Toplayan "⋯ İşlemler" Butonu */}
-          <button
-            type="button"
-            onClick={() => setIsMobileActionSheetOpen(true)}
-            className="flex items-center space-x-1 h-8 px-2.5 rounded-lg bg-theme-card hover:bg-theme-card-hover text-theme-secondary hover:text-theme-primary text-xs font-semibold border border-theme-subtle shadow-xs active:scale-95 transition-all"
-          >
-            <MoreHorizontal className="w-4 h-4 text-blue-400" />
-            <span>İşlemler</span>
-          </button>
-        </div>
-      </div>
+          {/* Masaüstü: Dropdown İşlemler Menüsü | Mobil: Action Sheet Tetikleyici */}
+          <div className="relative shrink-0" ref={actionsMenuRef}>
+            {/* Mobil Buton */}
+            <button
+              type="button"
+              onClick={() => setIsMobileActionSheetOpen(true)}
+              className="flex md:hidden items-center space-x-1 h-[30px] px-2 rounded-md bg-theme-card hover:bg-theme-card-hover text-theme-secondary hover:text-theme-primary text-xs font-semibold border border-theme-subtle shadow-xs active:scale-95 transition-all"
+            >
+              <MoreHorizontal className="w-4 h-4 text-blue-400" />
+              <span>İşlemler</span>
+            </button>
 
-      {/* 2. MASAÜSTÜ ÜST ÇUBUK (hidden md:block) */}
-      <div className="hidden md:block p-3 border-b border-theme-subtle bg-theme-surface space-y-2.5 shrink-0">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center space-x-2">
-            <span className="text-xs font-bold text-theme-primary uppercase tracking-wider flex items-center gap-1.5">
-              <span>Doğrulama İstasyonu</span>
-            </span>
-            {gibQrData?.is_gib_verified && (
-              <div 
-                className="inline-flex items-center h-5 bg-emerald-950/40 border border-emerald-500/25 rounded px-1.5 gap-1 shadow-[inset_0_1px_0_0_rgba(52,211,153,0.15)] select-none"
-                title={gibQrData.message}
-              >
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)]" />
-                <span className="text-[9px] font-bold text-emerald-300 uppercase tracking-wider">
-                  GİB Mühürlü
-                </span>
-                {gibQrData.ettn && (
+            {/* Masaüstü Buton */}
+            <button
+              type="button"
+              onClick={() => setIsActionsMenuOpen((p) => !p)}
+              className="hidden md:flex items-center space-x-1 h-[30px] px-2.5 rounded-md bg-theme-card hover:bg-theme-card-hover text-theme-secondary hover:text-theme-primary text-xs font-semibold border border-theme-subtle shadow-xs active:scale-95 transition-all"
+              title="Tüm ERP, U-ETDS ve Dışa Aktarma İşlemleri"
+            >
+              <MoreHorizontal className="w-4 h-4 text-blue-400" />
+              <span>İşlemler</span>
+              <ChevronDown className="w-3 h-3 text-theme-muted" />
+            </button>
+
+            {/* Masaüstü Açılır Menü */}
+            {isActionsMenuOpen && (
+              <div className="hidden md:block absolute right-0 top-full mt-1.5 w-60 bg-theme-surface border border-theme-subtle rounded-xl shadow-2xl z-40 p-1.5 space-y-0.5 text-xs">
+                {!isNonInvoice && erpLintData && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsActionsMenuOpen(false);
+                      setIsErpModalOpen(true);
+                    }}
+                    className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-theme-secondary hover:bg-theme-card hover:text-theme-primary transition-colors text-left"
+                  >
+                    <div className="flex items-center space-x-2">
+                      <ShieldCheck className="w-4 h-4 text-blue-400" />
+                      <span>Kurumsal ERP Linter</span>
+                    </div>
+                    <span className="text-[10px] font-mono font-bold text-blue-400">%{Math.round(erpLintData.overall_score || 0)}</span>
+                  </button>
+                )}
+
+                {!isNonInvoice && (
                   <>
-                    <span className="w-px h-2.5 bg-emerald-500/30" />
-                    <span className="font-mono text-[9px] text-emerald-400/90 font-medium">
-                      {gibQrData.ettn.substring(0, 8)}...
-                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsActionsMenuOpen(false);
+                        handleOpenUetdsModal();
+                      }}
+                      className="w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-lg text-theme-secondary hover:bg-theme-card hover:text-theme-primary transition-colors text-left"
+                    >
+                      <Truck className="w-4 h-4 text-indigo-400" />
+                      <span>U-ETDS Sefer Bildirimi</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsActionsMenuOpen(false);
+                        handleOpenPoReconcile();
+                      }}
+                      className="w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-lg text-theme-secondary hover:bg-theme-card hover:text-theme-primary transition-colors text-left"
+                    >
+                      <Building2 className="w-4 h-4 text-amber-400" />
+                      <span>3-Way PO Eşleştirme</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsActionsMenuOpen(false);
+                        handleCopyErpData();
+                      }}
+                      className="w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-lg text-theme-secondary hover:bg-theme-card hover:text-theme-primary transition-colors text-left"
+                    >
+                      <Copy className="w-4 h-4 text-emerald-400" />
+                      <span>{isCopiedErp ? '✓ Kopyalandı' : 'Panoya ERP JSON Kopyala'}</span>
+                    </button>
                   </>
                 )}
-              </div>
-            )}
-            {hasUnsavedChanges && (
-              <span className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] bg-amber-500/10 text-amber-400 border border-amber-500/20 font-medium">
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-                <span className="hidden xs:inline">Değişiklikler var</span>
-              </span>
-            )}
-          </div>
 
-          <div className="flex items-center space-x-1.5 sm:space-x-2 text-[11px]">
-            {isNonInvoice ? (
-              <div className="flex items-center space-x-1 text-rose-400 bg-rose-500/10 border border-rose-500/20 px-2 py-0.5 rounded-md text-[10px] font-semibold">
-                <ShieldAlert className="w-3.5 h-3.5 text-rose-400" />
-                <span>İrsaliye Dışı</span>
-              </div>
-            ) : suspiciousCount > 0 ? (
-              <button
-                type="button"
-                onClick={jumpToNextSuspicious}
-                className="flex items-center space-x-1 text-amber-300 bg-amber-500/10 border border-amber-500/30 hover:bg-amber-500/20 px-2 py-0.5 min-h-[26px] rounded-md text-[10px] font-medium transition-all"
-                title="Şüpheli alana git (Kısayol: F2)"
-              >
-                <AlertTriangle className="w-3 h-3 text-amber-400" />
-                <span>{suspiciousCount} Şüpheli (F2)</span>
-              </button>
-            ) : (
-              <div className="flex items-center space-x-1 text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-md text-[10px] font-medium">
-                <CheckCheck className="w-3 h-3" />
-                <span>Doğrulandı</span>
-              </div>
-            )}
+                <div className="border-t border-theme-subtle my-1" />
 
-            {!isNonInvoice && (
-              <div className="flex items-center space-x-1.5 text-theme-muted bg-theme-card px-2 py-0.5 rounded-md border border-theme-subtle text-[10px] font-mono tabular-nums">
-                <Zap className="w-3 h-3 text-amber-400 shrink-0" />
-                <span className="text-theme-secondary font-medium">⚡ ~1.2s</span>
-                <span className="text-theme-muted">|</span>
-                <span className="font-bold text-emerald-400">
-                  %{Math.round((typeof formData.guven_skoru === 'number' && Number.isFinite(formData.guven_skoru) ? formData.guven_skoru : 0.95) * 100)} Doğruluk
-                </span>
-              </div>
-            )}
-          </div>
-        </div>
+                <div className="px-2.5 py-1 text-[10px] font-semibold text-theme-muted uppercase tracking-wider">
+                  Dışa Aktar
+                </div>
 
-        {/* Masaüstü Aksiyon Butonları */}
-        <div className="flex items-center space-x-2">
-          {isNonInvoice ? (
-            onDeleteDoc && (
-              <button
-                type="button"
-                onClick={() => onDeleteDoc(document.id)}
-                className="flex-1 flex items-center justify-center space-x-1.5 bg-rose-600 hover:bg-rose-500 text-white py-2 px-3 min-h-[38px] rounded-lg text-xs font-bold shadow-md shadow-rose-600/20 truncate tactile-btn"
-                title="İrsaliye dışı görseli kuyruktan sil ve sonrakine geç (Delete)"
-              >
-                <Trash2 className="w-3.5 h-3.5 shrink-0" />
-                <span className="truncate">Kuyruktan Çıkar / Reddet</span>
-                <span className="text-[10px] text-rose-200/80 font-mono hidden lg:inline">(Del)</span>
-              </button>
-            )
-          ) : (
-            <button
-              type="button"
-              onClick={() => handleApproveAndNext(false)}
-              disabled={isSaving}
-              className="flex-1 flex items-center justify-center space-x-1.5 bg-emerald-600 hover:bg-emerald-500 text-white py-2 px-3 min-h-[38px] rounded-lg text-xs font-bold shadow-md shadow-emerald-600/20 truncate tactile-btn-emerald"
-              title="Verileri onayla ve bir sonraki irsaliyeye geç (Ctrl+Enter)"
-            >
-              <CheckCheck className="w-4 h-4 stroke-[2.5] shrink-0" />
-              <span className="truncate">Onayla & Sonraki</span>
-              <span className="text-[10px] text-emerald-200/80 font-mono hidden lg:inline">(Ctrl+↵)</span>
-            </button>
-          )}
-
-          <button
-            type="button"
-            onClick={() => onProcessDocument(document.id)}
-            disabled={isProcessing}
-            className="p-2 min-w-[38px] min-h-[38px] flex items-center justify-center bg-theme-card hover:bg-theme-card-hover text-theme-secondary hover:text-theme-primary rounded-lg text-xs border border-theme-subtle shrink-0 tactile-icon"
-            title="Belgeyi Yeniden Çözümle"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${isProcessing ? 'animate-spin text-blue-400' : ''}`} />
-          </button>
-
-          {/* Tek Tıkla ERP Kopyala Butonu */}
-          {!isNonInvoice && (
-            <button
-              type="button"
-              onClick={handleCopyErpData}
-              className="flex items-center space-x-1.5 bg-theme-card hover:bg-theme-card-hover text-theme-secondary hover:text-theme-primary py-2 px-2.5 min-h-[38px] rounded-lg text-xs font-semibold border border-theme-subtle shrink-0 tactile-btn"
-              title="ERP uyumlu JSON formatında panoya kopyala"
-            >
-              {isCopiedErp ? (
-                <>
-                  <Check className="w-3.5 h-3.5 text-emerald-400" />
-                  <span className="text-emerald-400 font-bold text-[11px]">Kopyalandı</span>
-                </>
-              ) : (
-                <>
-                  <Copy className="w-3.5 h-3.5 text-blue-400" />
-                  <span className="hidden xl:inline text-[11px]">ERP Kopyala</span>
-                </>
-              )}
-            </button>
-          )}
-
-          {/* Kurumsal ERP Linter & Şema Doğrulayıcı Butonu */}
-          {!isNonInvoice && erpLintData && (
-            <button
-              type="button"
-              onClick={() => setIsErpModalOpen(true)}
-              className="flex items-center space-x-1.5 bg-blue-950/40 hover:bg-blue-900/50 text-blue-300 border border-blue-500/30 py-2 px-2.5 min-h-[38px] rounded-lg text-xs font-semibold shrink-0 tactile-btn"
-              title="Logo Tiger, SAP S/4HANA ve U-ETDS Kurumsal Doğrulama Konsolu"
-            >
-              <ShieldCheck className="w-3.5 h-3.5 text-blue-400" />
-              <span className="font-mono text-[11px] font-bold">ERP Linter %{Math.round(erpLintData.overall_score || 0)}</span>
-            </button>
-          )}
-
-          {/* Dışa Aktar Dropdown */}
-          <div className="relative shrink-0" ref={exportMenuRef}>
-            <button
-              type="button"
-              onClick={() => setIsExportMenuOpen((prev) => !prev)}
-              className="flex items-center space-x-1.5 bg-theme-card hover:bg-theme-card-hover text-theme-secondary hover:text-theme-primary py-2 px-2.5 min-h-[38px] rounded-lg text-xs font-semibold border border-theme-subtle tactile-btn"
-              title="Dışa aktarma seçenekleri"
-            >
-              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-              <span className="hidden xs:inline text-[11px]">Dışa Aktar</span>
-              <ChevronDown className="w-3 h-3 text-theme-muted shrink-0" />
-            </button>
-
-            {isExportMenuOpen && (
-              <div className="absolute right-0 top-full mt-1.5 w-52 bg-theme-surface border border-theme-subtle rounded-xl shadow-2xl z-30 p-1 space-y-0.5">
                 <a
                   href={documentApi.getSingleExcelUrl(document.id)}
                   download
-                  onClick={() => setIsExportMenuOpen(false)}
-                  className="flex items-center space-x-2 px-3 py-2 rounded-lg text-xs text-theme-secondary hover:bg-theme-card hover:text-theme-primary transition-colors min-h-[36px]"
+                  onClick={() => setIsActionsMenuOpen(false)}
+                  className="flex items-center space-x-2 px-2.5 py-1.5 rounded-lg text-theme-secondary hover:bg-theme-card hover:text-theme-primary transition-colors"
                 >
                   <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
                   <span>Excel Raporu (.xlsx)</span>
                 </a>
+
                 <a
                   href={documentApi.getSingleLogoXmlUrl(document.id)}
                   download
-                  onClick={() => setIsExportMenuOpen(false)}
-                  className="flex items-center space-x-2 px-3 py-2 rounded-lg text-xs text-theme-secondary hover:bg-theme-card hover:text-theme-primary transition-colors min-h-[36px]"
+                  onClick={() => setIsActionsMenuOpen(false)}
+                  className="flex items-center space-x-2 px-2.5 py-1.5 rounded-lg text-theme-secondary hover:bg-theme-card hover:text-theme-primary transition-colors"
                 >
                   <FileCode className="w-4 h-4 text-blue-400" />
                   <span>Logo Tiger/Go (.xml)</span>
                 </a>
+
                 <a
                   href={documentApi.getSingleJsonUrl(document.id)}
                   download
-                  onClick={() => setIsExportMenuOpen(false)}
-                  className="flex items-center space-x-2 px-3 py-2 rounded-lg text-xs text-theme-secondary hover:bg-theme-card hover:text-theme-primary transition-colors min-h-[36px]"
+                  onClick={() => setIsActionsMenuOpen(false)}
+                  className="flex items-center space-x-2 px-2.5 py-1.5 rounded-lg text-theme-secondary hover:bg-theme-card hover:text-theme-primary transition-colors"
                 >
                   <FileJson className="w-4 h-4 text-amber-400" />
                   <span>B2B Standart JSON (.json)</span>
                 </a>
-                <button
-                  type="button"
-                  onClick={() => {
-                    handleCopyErpData();
-                    setIsExportMenuOpen(false);
-                  }}
-                  className="w-full flex items-center space-x-2 px-3 py-2 rounded-lg text-xs text-theme-secondary hover:bg-theme-card hover:text-theme-primary transition-colors min-h-[36px] text-left border-t border-theme-subtle pt-1"
-                >
-                  <Copy className="w-4 h-4 text-blue-400" />
-                  <span>Panoya ERP Verisi Kopyala</span>
-                </button>
               </div>
             )}
           </div>
-
-          {hasUnsavedChanges && (
-            <button
-              type="button"
-              onClick={() => handleSaveChanges()}
-              disabled={isSaving}
-              className="p-2 min-w-[38px] min-h-[38px] flex items-center justify-center bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs shadow-md shadow-blue-600/20 shrink-0 tactile-btn"
-              title="Değişiklikleri Kaydet"
-            >
-              <Save className="w-3.5 h-3.5" />
-            </button>
-          )}
         </div>
-      </div>
+      </header>
 
-      {/* Cadence Braking (Ritmik Frenleme) Mikro-Direnç Uyarı Bandı (Her iki ekranda da temiz görünür) */}
+      {/* Cadence Braking (Ritmik Frenleme) Mikro-Direnç Uyarı Bandı */}
       {cadenceWarning && (
         <div className="p-2.5 mx-3 mt-2 rounded-xl bg-amber-500/15 border border-amber-500/40 cadence-shake flex flex-col gap-2 shadow-lg shrink-0">
           <div className="flex items-start space-x-2">
@@ -769,7 +742,7 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
         </div>
       )}
 
-      {/* İrsaliye Dışı Belgede "Kusursuz Kararlılık" Uygunsuzluk & Ayıklama Paneli */}
+      {/* İrsaliye Dışı Belgede Uygunsuzluk & Ayıklama Paneli */}
       {isNonInvoice ? (
         <div className="flex-1 overflow-y-auto p-4 flex flex-col items-center justify-center text-center space-y-4">
           <div className="w-16 h-16 rounded-2xl bg-rose-500/10 border border-rose-500/25 flex items-center justify-center text-rose-400">
@@ -817,122 +790,79 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
         </div>
       ) : (
         <>
-          {/* Masaüstünde Matematiksel Mutabakat Rozeti & 3-Way PO & U-ETDS Bakanlık Butonları */}
-          <div className="hidden md:block px-3 pt-3 space-y-2 shrink-0">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold text-theme-muted uppercase tracking-wider">
-                Doğrulama & Mutabakat
-              </span>
-              <div className="flex items-center space-x-1.5">
-                <button
-                  type="button"
-                  onClick={handleOpenUetdsModal}
-                  disabled={isLoadingUetds}
-                  className="flex items-center space-x-1 px-2 py-0.5 rounded bg-blue-500/10 hover:bg-blue-500/20 text-blue-300 border border-blue-500/30 text-[10px] font-semibold transition-all tactile-btn"
-                  title="Ulaştırma Bakanlığı 4925 Karayolu Taşıma Kanunu U-ETDS Sefer Bildirimi"
-                >
-                  <Truck className={`w-3 h-3 text-blue-400 ${isLoadingUetds ? 'animate-spin' : ''}`} />
-                  <span>{isLoadingUetds ? 'Hazırlanıyor...' : 'U-ETDS'}</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={handleOpenPoReconcile}
-                  disabled={isLoadingPo}
-                  className="flex items-center space-x-1 px-2 py-0.5 rounded bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-[10px] font-semibold transition-all tactile-btn"
-                  title="ERP Satınalma Siparişi ile 3'lü Eşleştirme (3-Way PO Matching)"
-                >
-                  <Building2 className={`w-3 h-3 text-indigo-400 ${isLoadingPo ? 'animate-spin' : ''}`} />
-                  <span>{isLoadingPo ? 'Eşleştiriliyor...' : '3-Way ERP'}</span>
-                </button>
-              </div>
+          {/* İkincil Şerit: Sekmeler (Tabs) & Satır İçi Telemetri (40px) */}
+          <div className="h-10 border-b border-theme-subtle bg-theme-surface px-2 sm:px-3 flex items-center justify-between shrink-0 select-none min-w-0">
+            {/* Sekmeler */}
+            <div className="flex items-center space-x-1 h-full">
+              <button
+                type="button"
+                onClick={() => setActiveTab('items')}
+                className={`h-full flex items-center space-x-1.5 px-2.5 text-xs font-semibold border-b-2 transition-all ${
+                  activeTab === 'items'
+                    ? 'border-blue-500 text-blue-400 bg-theme-card/30'
+                    : 'border-transparent text-theme-muted hover:text-theme-primary'
+                }`}
+              >
+                <Package className="w-3.5 h-3.5" />
+                <span>Kalemler ({formData.kalemler?.length || 0})</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('header')}
+                className={`h-full flex items-center space-x-1.5 px-2.5 text-xs font-semibold border-b-2 transition-all ${
+                  activeTab === 'header'
+                    ? 'border-blue-500 text-blue-400 bg-theme-card/30'
+                    : 'border-transparent text-theme-muted hover:text-theme-primary'
+                }`}
+              >
+                <FileText className="w-3.5 h-3.5" />
+                <span>Başlık & Firma</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('all')}
+                className={`hidden md:flex h-full items-center space-x-1.5 px-2.5 text-xs font-semibold border-b-2 transition-all ${
+                  activeTab === 'all'
+                    ? 'border-blue-500 text-blue-400 bg-theme-card/30'
+                    : 'border-transparent text-theme-muted hover:text-theme-primary'
+                }`}
+              >
+                <Layers className="w-3.5 h-3.5" />
+                <span>Tümü</span>
+              </button>
             </div>
-            {isMathMatch ? (
-              <div className="flex items-center space-x-2 p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/25 text-emerald-300 text-xs">
-                <CheckCheck className="w-4 h-4 text-emerald-400 shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold text-emerald-200">Matematiksel Mutabakat: Kusursuz</span>
-                    <span className="font-mono font-bold text-emerald-400 tabular-nums">
-                      {totalCalculatedQty.toLocaleString('tr-TR')} / {parsedDocTotalQty?.toLocaleString('tr-TR')} Adet
-                    </span>
-                  </div>
-                  <span className="text-[10px] text-emerald-300/80 block mt-0.5">
-                    Kalemler toplamı ile irsaliye dip toplamı birebir uyuşuyor.
-                  </span>
-                </div>
-              </div>
-            ) : isMathDiscrepancy ? (
-              <div className="flex items-center space-x-2 p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs">
-                <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold text-amber-200">Miktar Uyuşmazlığı Uyarısı</span>
-                    <span className="font-mono font-bold text-amber-300 tabular-nums">
-                      Fark: {Math.abs(totalCalculatedQty - (parsedDocTotalQty || 0)).toLocaleString('tr-TR')} Adet
-                    </span>
-                  </div>
-                  <span className="text-[10px] text-amber-300/80 block mt-0.5">
-                    Kalem toplamı ({totalCalculatedQty.toLocaleString('tr-TR')}) ile dip toplam ({parsedDocTotalQty?.toLocaleString('tr-TR')}) arasında fark var!
-                  </span>
-                </div>
-              </div>
-            ) : totalCalculatedQty > 0 ? (
-              <div className="flex items-center justify-between p-2 rounded-lg bg-theme-card border border-theme-subtle text-xs text-theme-secondary">
-                <span className="flex items-center gap-1.5 font-medium">
-                  <Package className="w-3.5 h-3.5 text-blue-400" />
-                  <span>Toplam Sevkiyat Miktarı</span>
+
+            {/* Sağ: Satır İçi Matematiksel Mutabakat & Şüpheli Telemetrisi */}
+            <div className="flex items-center space-x-1.5 text-[11px] shrink-0">
+              {isMathMatch ? (
+                <span className="flex items-center space-x-1 text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-md font-mono text-[10px]" title="Kalemler toplamı ile irsaliye dip toplamı tam eşleşiyor">
+                  <CheckCheck className="w-3 h-3 text-emerald-400" />
+                  <span className="hidden sm:inline">Dip:</span>
+                  <span>{totalCalculatedQty.toLocaleString('tr-TR')} Ad.</span>
                 </span>
-                <span className="font-mono font-bold text-theme-primary tabular-nums">
-                  {totalCalculatedQty.toLocaleString('tr-TR')} Adet
+              ) : isMathDiscrepancy ? (
+                <span className="flex items-center space-x-1 text-amber-300 bg-amber-500/15 border border-amber-500/30 px-2 py-0.5 rounded-md font-mono text-[10px] animate-pulse" title={`Kalemler (${totalCalculatedQty.toLocaleString('tr-TR')}) ≠ İrsaliye (${parsedDocTotalQty?.toLocaleString('tr-TR')})`}>
+                  <AlertTriangle className="w-3 h-3 text-amber-400" />
+                  <span>Fark: {Math.abs(totalCalculatedQty - (parsedDocTotalQty || 0)).toLocaleString('tr-TR')}</span>
                 </span>
-              </div>
-            ) : null}
-          </div>
+              ) : totalCalculatedQty > 0 ? (
+                <span className="font-mono text-[10px] text-theme-muted bg-theme-card px-2 py-0.5 rounded border border-theme-subtle">
+                  {totalCalculatedQty.toLocaleString('tr-TR')} Ad.
+                </span>
+              ) : null}
 
-          {/* Akıllı Sekme / Segment Seçici: Mobilde Geniş Başparmak Hedefleri */}
-          <div className="flex border-b border-theme-subtle bg-theme-surface px-2 sm:px-3 pt-2 shrink-0 gap-1 select-none">
-            {/* Kalemler Sekmesi - Mobilde En Sık Kullanılan Başparmak Hedefi */}
-            <button
-              type="button"
-              onClick={() => setActiveTab('items')}
-              className={`flex-1 md:flex-initial flex items-center justify-center space-x-1.5 px-3 py-2 min-h-[36px] text-xs font-semibold rounded-t-lg transition-all tactile-btn ${
-                activeTab === 'items'
-                  ? 'border-b-2 border-blue-500 text-blue-400 bg-theme-card'
-                  : 'text-theme-muted hover:text-theme-primary'
-              }`}
-            >
-              <Package className="w-3.5 h-3.5" />
-              <span>Kalemler ({formData.kalemler?.length || 0})</span>
-            </button>
-
-            {/* Başlık & Taraflar */}
-            <button
-              type="button"
-              onClick={() => setActiveTab('header')}
-              className={`flex-1 md:flex-initial flex items-center justify-center space-x-1.5 px-3 py-2 min-h-[36px] text-xs font-semibold rounded-t-lg transition-all tactile-btn ${
-                activeTab === 'header'
-                  ? 'border-b-2 border-blue-500 text-blue-400 bg-theme-card'
-                  : 'text-theme-muted hover:text-theme-primary'
-              }`}
-            >
-              <FileText className="w-3.5 h-3.5" />
-              <span>Başlık & Firma</span>
-            </button>
-
-            {/* Masaüstünde "Tümü" Sekmesi */}
-            <button
-              type="button"
-              onClick={() => setActiveTab('all')}
-              className={`hidden md:flex flex-initial items-center space-x-1.5 px-3 py-2 min-h-[36px] text-xs font-semibold rounded-t-lg transition-all tactile-btn ${
-                activeTab === 'all'
-                  ? 'border-b-2 border-indigo-500 text-indigo-400 bg-theme-card'
-                  : 'text-theme-muted hover:text-theme-primary'
-              }`}
-            >
-              <Layers className="w-3.5 h-3.5" />
-              <span>Tümü</span>
-              <span className="text-[10px] text-theme-muted font-mono hidden sm:inline">(1)</span>
-            </button>
+              {suspiciousCount > 0 && (
+                <button
+                  type="button"
+                  onClick={jumpToNextSuspicious}
+                  className="flex items-center space-x-1 text-amber-300 bg-amber-500/15 border border-amber-500/30 px-2 py-0.5 rounded font-mono text-[10px] hover:bg-amber-500/25 transition-colors"
+                  title="Şüpheli alana git (Kısayol: F2)"
+                >
+                  <AlertTriangle className="w-3 h-3 text-amber-400" />
+                  <span>{suspiciousCount} Şüpheli (F2)</span>
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Form Gövdesi (Scroll Area) */}

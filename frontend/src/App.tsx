@@ -388,8 +388,8 @@ export const App: React.FC = () => {
         {/* İstasyon Görünümü */}
         <div className={`flex-1 flex flex-col md:flex-row overflow-hidden ${activeView === 'station' ? 'flex' : 'hidden'}`}>
           
-          {/* 1. Sütun: Kuyruk (Desktop: Her zaman sol sütun | Mobil: 'queue' sekmesinde tam ekran) */}
-          <div className={`h-full min-w-0 w-full md:w-auto overflow-hidden ${mobileTab === 'queue' ? 'flex flex-1' : 'hidden'} md:flex md:flex-none`}>
+          {/* 1. Sütun: Kuyruk (Desktop: w-64 / lg:w-72 kompakt sol sütun | Mobil: 'queue' sekmesinde tam ekran) */}
+          <div className={`h-full min-w-0 w-full md:w-64 lg:w-72 shrink-0 overflow-hidden ${mobileTab === 'queue' ? 'flex flex-1' : 'hidden'} md:flex`}>
             <ErrorBoundary panelName="Evrak Kuyruğu" onReset={fetchDocuments}>
               <BatchQueue
                 documents={documents}
@@ -406,7 +406,7 @@ export const App: React.FC = () => {
             </ErrorBoundary>
           </div>
 
-          {/* 2. Sütun: Önizleme / Viewer (Desktop: Orta sütun | Mobil: 'viewer' sekmesinde tam ekran) */}
+          {/* 2. Sütun: Önizleme / Viewer (Desktop: Esnek dengeli orta sütun | Mobil: 'viewer' sekmesinde tam ekran) */}
           <div className={`h-full min-w-0 w-full overflow-hidden ${mobileTab === 'viewer' ? 'flex flex-1' : 'hidden'} md:flex md:flex-1`}>
             <ErrorBoundary panelName="Evrak Önizleme Masası">
               <DocumentViewer
@@ -419,8 +419,8 @@ export const App: React.FC = () => {
             </ErrorBoundary>
           </div>
 
-          {/* 3. Sütun: Düzenleme Formu / Editor (Desktop: Sağ sütun | Mobil: 'editor' sekmesinde tam ekran) */}
-          <div className={`h-full min-w-0 w-full md:w-auto overflow-hidden ${mobileTab === 'editor' ? 'flex flex-1' : 'hidden'} md:flex md:flex-none`}>
+          {/* 3. Sütun: Düzenleme Formu / Editor (Desktop: Ferah ve dikey uyumlu sağ sütun | Mobil: 'editor' sekmesinde tam ekran) */}
+          <div className={`h-full min-w-0 w-full md:w-[440px] lg:w-[480px] xl:w-[540px] 2xl:w-[580px] shrink-0 overflow-hidden ${mobileTab === 'editor' ? 'flex flex-1' : 'hidden'} md:flex`}>
             <ErrorBoundary panelName="Doğrulama ve Düzenleme Formu">
               <DocumentEditor
                 document={selectedDoc}

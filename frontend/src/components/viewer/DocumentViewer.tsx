@@ -417,8 +417,13 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
 
   return (
     <main className="flex-1 h-full bg-theme-app flex flex-col min-w-0 select-none relative overflow-hidden">
-      {document && (
+      {document ? (
         <ViewerToolbar
+          fileName={document.dosya_adi}
+          activePageIndex={activePageIndex}
+          totalPages={pages.length}
+          onPrevPage={() => setActivePageIndex((p) => Math.max(0, p - 1))}
+          onNextPage={() => setActivePageIndex((p) => Math.min(pages.length - 1, p + 1))}
           zoom={safeZoom}
           rotation={safeRotation}
           contrastBoost={contrastBoost}
@@ -433,61 +438,12 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
           onRotateCounterClockwise={handleRotateCounterClockwise}
           onToggleContrast={() => setContrastBoost((p) => !p)}
         />
-      )}
-
-      {/* Çok Sayfalı İrsaliye Sayfa Gezgini */}
-      {document && pages.length > 1 && (
-        <div className="absolute bottom-3 sm:bottom-4 md:bottom-auto md:top-14 left-1/2 -translate-x-1/2 bg-theme-surface/90 backdrop-blur-md border border-purple-500/40 rounded-full px-2 sm:px-3 py-1 flex items-center space-x-1.5 sm:space-x-2 text-xs select-none z-20 shadow-2xl max-w-[calc(100vw-20px)] sm:max-w-fit overflow-x-auto no-scrollbar">
-          <div className="flex items-center space-x-1 sm:space-x-2 shrink-0">
-            <span className="text-[11px] text-purple-300 font-semibold flex items-center shrink-0">
-              <Layers className="w-3.5 h-3.5 mr-1 text-purple-400" />
-              <span className="hidden sm:inline">Çok Sayfalı İrsaliye</span>
-              <span className="sm:hidden font-medium">Sayfalar</span>
-            </span>
-            <div className="flex items-center space-x-0.5 sm:space-x-1 bg-theme-card border border-theme-subtle rounded px-1.5 py-0.5">
-              <button
-                type="button"
-                disabled={activePageIndex === 0}
-                onClick={() => setActivePageIndex((p) => Math.max(0, p - 1))}
-                className="p-1 min-w-[34px] min-h-[34px] flex items-center justify-center text-theme-muted hover:text-theme-primary disabled:opacity-30 transition-colors active:scale-95"
-                title="Önceki Sayfa"
-                aria-label="Önceki Sayfa"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-              <span className="font-mono text-[11px] text-theme-primary px-1 font-medium whitespace-nowrap tabular-nums">
-                {activePageIndex + 1} / {pages.length}
-              </span>
-              <button
-                type="button"
-                disabled={activePageIndex === pages.length - 1}
-                onClick={() => setActivePageIndex((p) => Math.min(pages.length - 1, p + 1))}
-                className="p-1 min-w-[34px] min-h-[34px] flex items-center justify-center text-theme-muted hover:text-theme-primary disabled:opacity-30 transition-colors active:scale-95"
-                title="Sonraki Sayfa"
-                aria-label="Sonraki Sayfa"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-
-          <div className="flex items-center space-x-1 shrink-0 overflow-x-auto no-scrollbar">
-            {pages.map((_, idx) => (
-              <button
-                type="button"
-                key={idx}
-                onClick={() => setActivePageIndex(idx)}
-                className={`px-2.5 py-1 min-w-[34px] min-h-[34px] rounded text-xs font-semibold transition-all flex items-center justify-center active:scale-95 ${
-                  activePageIndex === idx
-                    ? 'bg-purple-600 text-white shadow-sm'
-                    : 'bg-theme-card text-theme-muted hover:bg-theme-card-hover hover:text-theme-primary'
-                }`}
-              >
-                {idx + 1}
-              </button>
-            ))}
-          </div>
-        </div>
+      ) : (
+        <header className="h-12 border-b border-theme-subtle bg-theme-surface/95 px-4 flex items-center shrink-0 select-none">
+          <span className="text-xs font-semibold text-theme-muted uppercase tracking-wider">
+            Evrak Önizleme Masası
+          </span>
+        </header>
       )}
 
       <div
