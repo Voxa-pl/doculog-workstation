@@ -471,6 +471,73 @@ input[type="number"],
   transform: translateY(1px) scale(0.92);
 }
 
+/* ==========================================================================
+   12. QUANTUM ORBITAL PARTICLES (120 FPS ZERO-REFLOW GPU COMPOSITOR)
+   ========================================================================== */
+
+@keyframes quantumOrbitCW {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes quantumOrbitCCW {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(-360deg);
+  }
+}
+
+@keyframes quantumPulse {
+  0%, 100% {
+    transform: translate(-50%, -50%) scale(0.35);
+    opacity: 0.2;
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.45);
+    opacity: 0.95;
+  }
+}
+
+@keyframes quantumCoreBreathe {
+  0%, 100% {
+    transform: scale(0.85);
+    opacity: 0.25;
+  }
+  50% {
+    transform: scale(1.25);
+    opacity: 0.6;
+  }
+}
+
+.quantum-ring-cw {
+  animation: quantumOrbitCW linear infinite;
+  will-change: transform;
+  transform-origin: center center;
+}
+
+.quantum-ring-ccw {
+  animation: quantumOrbitCCW linear infinite;
+  will-change: transform;
+  transform-origin: center center;
+}
+
+.quantum-dot-pulse {
+  animation: quantumPulse ease-in-out infinite;
+  will-change: transform, opacity;
+}
+
+.quantum-core-glow {
+  animation: quantumCoreBreathe 2.8s ease-in-out infinite;
+  will-change: transform, opacity;
+}
+
+
 
 
 

@@ -137,9 +137,10 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
       currentDocIdRef.current = document?.id || null;
       setFormData(document?.veri ? JSON.parse(JSON.stringify(document.veri)) : null);
       setHasUnsavedChanges(false);
+      hasUnsavedChangesRef.current = false;
     } else {
       // Arka plan WebSocket veya liste senkronizasyonunda kullanıcının formu ezilmesin (Dirty-State Guard)
-      if (!hasUnsavedChangesRef.current) {
+      if (!hasUnsavedChangesRef.current && !hasUnsavedChanges) {
         setFormData(document?.veri ? JSON.parse(JSON.stringify(document.veri)) : null);
       }
     }
@@ -347,30 +348,21 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
   }
 
   const handleHeaderChange = (newHeader: IrsaliyeHeader) => {
-    if (!formData) return;
-    setFormData({
-      ...formData,
-      header: newHeader,
-    });
+    hasUnsavedChangesRef.current = true;
     setHasUnsavedChanges(true);
+    setFormData((prev) => (prev ? { ...prev, header: newHeader } : null));
   };
 
   const handleItemsChange = (newItems: LineItem[]) => {
-    if (!formData) return;
-    setFormData({
-      ...formData,
-      kalemler: newItems,
-    });
+    hasUnsavedChangesRef.current = true;
     setHasUnsavedChanges(true);
+    setFormData((prev) => (prev ? { ...prev, kalemler: newItems } : null));
   };
 
   const handleNotesChange = (notes: string) => {
-    if (!formData) return;
-    setFormData({
-      ...formData,
-      genel_notlar: notes,
-    });
+    hasUnsavedChangesRef.current = true;
     setHasUnsavedChanges(true);
+    setFormData((prev) => (prev ? { ...prev, genel_notlar: notes } : null));
   };
 
   const handleSaveChanges = async (newStatus?: ProcessingStatus) => {

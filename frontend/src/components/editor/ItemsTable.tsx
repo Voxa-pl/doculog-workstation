@@ -8,6 +8,12 @@ interface ItemsTableProps {
   onChange: (updatedItems: LineItem[]) => void;
 }
 
+// Kalem adı için tam geriye dönük uyumlu yardımcı (mal_hizmet, urun_adi, malzeme vb.)
+const getItemName = (item: any): string => {
+  if (!item) return '';
+  return item.mal_hizmet ?? item.urun_adi ?? item.malzeme_adi ?? item.mal_hizmet_cinsi ?? item.aciklama ?? item.tanim ?? item.name ?? '';
+};
+
 const COMMON_UNITS = [
   'Adet',
   'Koli',
@@ -29,9 +35,11 @@ export const ItemsTable: React.FC<ItemsTableProps> = ({ items, onChange }) => {
   const handleItemChange = (index: number, field: keyof LineItem, value: any) => {
     const updated = [...safeItems];
     if (!updated[index]) return;
+    const baseItem = updated[index];
     updated[index] = {
-      ...updated[index],
+      ...baseItem,
       [field]: value,
+      ...(field === 'mal_hizmet' ? { urun_adi: value, mal_hizmet: value } : {}),
     };
     onChange(updated);
   };
@@ -124,10 +132,10 @@ export const ItemsTable: React.FC<ItemsTableProps> = ({ items, onChange }) => {
                     </span>
                     <input
                       type="text"
-                      value={item.mal_hizmet ?? ''}
+                      value={getItemName(item)}
                       onChange={(e) => handleItemChange(index, 'mal_hizmet', e.target.value)}
                       placeholder="Mal / Ürün tanımı..."
-                      className="w-full bg-theme-surface/70 border border-theme-subtle/80 focus:border-blue-500 rounded-md px-2 py-1.5 text-xs text-theme-primary placeholder-theme-muted outline-none transition-colors truncate"
+                      className="w-full bg-theme-surface border border-theme-subtle focus:border-blue-500 rounded-md px-2.5 py-1.5 text-xs text-theme-primary placeholder-theme-muted outline-none transition-colors"
                     />
                   </div>
                   <button
@@ -259,13 +267,13 @@ export const ItemsTable: React.FC<ItemsTableProps> = ({ items, onChange }) => {
                       {item.sira_no || index + 1}
                     </td>
 
-                    <td className="py-1 px-1.5 min-w-0">
+                    <td className="py-1 px-1.5 min-w-[140px]">
                       <input
                         type="text"
-                        value={item.mal_hizmet ?? ''}
+                        value={getItemName(item)}
                         onChange={(e) => handleItemChange(index, 'mal_hizmet', e.target.value)}
                         placeholder="Ürün / Mal tanımı..."
-                        className="w-full bg-transparent hover:bg-theme-surface/80 focus:bg-theme-surface border border-transparent focus:border-blue-500 rounded px-1.5 py-1 text-theme-primary text-xs focus:outline-none transition-colors min-h-[30px] truncate"
+                        className="w-full bg-transparent hover:bg-theme-surface/80 focus:bg-theme-surface border border-transparent focus:border-blue-500 rounded px-2 py-1 text-theme-primary text-xs focus:outline-none transition-colors min-h-[30px]"
                       />
                     </td>
 

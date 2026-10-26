@@ -528,11 +528,12 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
                 style={{ pointerEvents: 'none' }}
                 draggable={false}
               />
-              {/* Kuantum/Nöral Nokta Kümesi (Evrak kararması ve nefes alan dönen noktalar) */}
-              <NeuralPointCloud isActive={isProcessing} />
             </div>
           </div>
         )}
+
+        {/* İzole Kadife Karartma & Kuantum Partikül Katmanı (Transform div'in DIŞINDA, sıfır reflow) */}
+        <NeuralPointCloud isActive={isProcessing} />
 
         {/* Minimal Linear Üst İlerleme Çizgisi (Discrete & Quiet) */}
         {isProcessing && (

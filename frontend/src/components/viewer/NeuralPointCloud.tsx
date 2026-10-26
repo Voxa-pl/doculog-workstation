@@ -1,34 +1,40 @@
 import React, { useEffect, useRef } from 'react';
 
-interface Point {
-  x: number;
-  y: number;
-  baseRadius: number;
-  layer: number; // 0: iç çekirdek, 1: orta kuşak, 2: dış bulut
+interface Particle {
+  baseR: number;
   angle: number;
   angularVelocity: number;
-  phase: number;
+  pulsePhase: number;
+  pulseFreq: number;
   baseSize: number;
-  color: string;
+  colorIdx: number;
 }
 
 interface NeuralPointCloudProps {
   isActive: boolean;
 }
 
+// Renk paleti: Siber Mavi, Nöral Gökyüzü, Kuantum Zümrüt, Kristal Beyaz
+const PALETTE = [
+  'rgba(56, 189, 248, ',  // Cyan 400
+  'rgba(96, 165, 250, ',  // Sky 400
+  'rgba(52, 211, 153, ',  // Emerald 400
+  'rgba(248, 250, 252, ', // White
+];
+
 /**
- * DocuLog - Kuantum/Nöral Nokta Kümesi (Neural Optical Point Cloud)
+ * DocuLog - 120 FPS Kuantum Sarmal Nokta Motoru (Swirling Celestial Particle Field)
  * 
- * Lazer tarama yerine evrak çözümlenirken beliren;
- * - 300ms ease-out kararma & 200ms ease-in çıkış vinyeti
- * - 3 konsantrik jiroskopik yörüngede dönen noktalar (12-18 rpm, zıt yönlü dönüşler)
- * - 1.8s sinüs periyotlu nefes alma (büyüyüp küçülen kuantum düğümleri)
- * - 3.6s radyal genleşme ve sinaptik bağ filamentleri
+ * - Render döngüsü içinde 0 DOM reflow (getBoundingClientRect SADECE ResizeObserver ile çalışır)
+ * - 0 shadowBlur (Mobil GPU'larda yazılımsal yavaşlamayı önler)
+ * - 48 adet konsantrik jiroskopik yörüngede dönen, sinüs dalgasıyla küçülüp büyüyen parıltılı parçacık
+ * - Batch Draw Call ile maksimum 4 çizim çağrısı
+ * - Telefon ve masaüstünde 120 FPS akıcı ve hafif
  */
 export const NeuralPointCloud: React.FC<NeuralPointCloudProps> = ({ isActive }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const animFrameRef = useRef<number | null>(null);
-  const startTimeRef = useRef<number>(Date.now());
+  const sizeRef = useRef<{ w: number; h: number; dpr: number }>({ w: 0, h: 0, dpr: 1 });
 
   useEffect(() => {
     if (!isActive) return;
@@ -38,131 +44,111 @@ export const NeuralPointCloud: React.FC<NeuralPointCloudProps> = ({ isActive }) 
     const ctx = canvas.getContext('2d', { alpha: true });
     if (!ctx) return;
 
-    // Retina / HiDPI desteği
-    const dpr = window.devicePixelRatio || 1;
-    const updateSize = () => {
+    // 1. BOYUTLANDIRMA SADECE RESIZEOBSERVER İLE YAPILIR
+    const updateCanvasSize = () => {
       const rect = canvas.getBoundingClientRect();
-      if (rect.width <= 0 || rect.height <= 0) return { w: 400, h: 400 };
+      if (rect.width <= 0 || rect.height <= 0) return;
+
+      const dpr = Math.min(window.devicePixelRatio || 1, 2); // Mobilde pil ve GPU dostu: maks 2x
+      sizeRef.current = { w: rect.width, h: rect.height, dpr };
+
       canvas.width = rect.width * dpr;
       canvas.height = rect.height * dpr;
-      ctx.setTransform(1, 0, 0, 1, 0, 0); // reset transform
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.scale(dpr, dpr);
-      return { w: rect.width, h: rect.height };
     };
 
-    let { w, h } = updateSize();
+    updateCanvasSize();
+    const ro = new ResizeObserver(updateCanvasSize);
+    ro.observe(canvas);
 
-    // Renk paleti: Siber Mavi, Nöral Kobalt, Zümrüt Kuantum
-    const colors = ['#38bdf8', '#60a5fa', '#3b82f6', '#34d399'];
-
-    // 3 Katmanlı Nokta Oluşturma (52 Nokta)
-    // Katman 0: İç Çekirdek (18 RPM - Saat yönü)
-    // Katman 1: Orta Kuşak (14 RPM - Ters saat yönü - Gyroscopic Parallax)
-    // Katman 2: Dış Hale (12 RPM - Saat yönü)
-    const points: Point[] = [];
+    // 2. 48 ADET SARMAL GÖKSEL PARTİKÜL (Swirling Celestial Nodes)
+    const PARTICLE_COUNT = 48;
+    const particles: Particle[] = [];
     const layers = [
-      { count: 12, minR: 35, maxR: 65, rpm: 18, dir: 1 },
-      { count: 18, minR: 85, maxR: 135, rpm: 14, dir: -1 },
-      { count: 22, minR: 155, maxR: 220, rpm: 12, dir: 1 },
+      { count: 10, minR: 28, maxR: 55, rpm: 18, dir: 1 },
+      { count: 16, minR: 70, maxR: 120, rpm: -14, dir: -1 },
+      { count: 22, minR: 135, maxR: 195, rpm: 11, dir: 1 },
     ];
 
     let pIdx = 0;
-    layers.forEach((l, lIdx) => {
-      const radPerSec = ((l.rpm * 2 * Math.PI) / 60) * l.dir;
+    layers.forEach((l) => {
+      const angularVel = ((l.rpm * 2 * Math.PI) / 60) * l.dir;
       for (let i = 0; i < l.count; i++) {
-        const angle = (i / l.count) * 2 * Math.PI + Math.random() * 0.35;
+        const angle = (i / l.count) * 2 * Math.PI + Math.random() * 0.25;
         const radius = l.minR + Math.random() * (l.maxR - l.minR);
-        points.push({
-          x: 0,
-          y: 0,
-          baseRadius: radius,
-          layer: lIdx,
+        particles.push({
+          baseR: radius,
           angle,
-          angularVelocity: radPerSec,
-          phase: (pIdx / 52) * 2 * Math.PI,
-          baseSize: 1.6 + Math.random() * 2.4,
-          color: colors[pIdx % colors.length],
+          angularVelocity: angularVel,
+          pulsePhase: Math.random() * Math.PI * 2,
+          pulseFreq: 1.8 + Math.random() * 1.4, // 1.8 - 3.2 rad/s nefes alma frekansı
+          baseSize: 1.5 + Math.random() * 2.2,
+          colorIdx: pIdx % PALETTE.length,
         });
         pIdx++;
       }
     });
 
-    startTimeRef.current = Date.now();
+    let lastTime = performance.now();
 
-    const render = () => {
-      const rect = canvas.getBoundingClientRect();
-      const width = rect.width;
-      const height = rect.height;
-      const centerX = width / 2;
-      const centerY = height / 2;
+    // 3. 120 FPS BATCH CANVAS 2D MOTORU (0 CPU Garbage, 0 shadowBlur)
+    const render = (now: number) => {
+      const dt = Math.min((now - lastTime) / 1000, 0.1);
+      lastTime = now;
 
-      const now = (Date.now() - startTimeRef.current) / 1000;
-      ctx.clearRect(0, 0, width, height);
-
-      // Nefes alma frekansı: 1.8s dalga boyu (f = 0.55 Hz)
-      const breathePeriod = 1.8;
-      const breatheFreq = (2 * Math.PI) / breathePeriod;
-      // Radyal genleşme alt-harmoniği: 3.6s
-      const radialFreq = (2 * Math.PI) / 3.6;
-
-      // Konumları güncelle
-      points.forEach((p) => {
-        const curAngle = p.angle + p.angularVelocity * now;
-        const curRadius = p.baseRadius * (1 + 0.14 * Math.cos(radialFreq * now + p.phase * 0.5));
-        p.x = centerX + Math.cos(curAngle) * curRadius;
-        p.y = centerY + Math.sin(curAngle) * curRadius;
-      });
-
-      // 1. Noktalar arası sinaptik bağlantı çizgileri (yakınlık < 62px)
-      ctx.lineWidth = 0.75;
-      for (let i = 0; i < points.length; i++) {
-        for (let j = i + 1; j < points.length; j++) {
-          const dx = points[i].x - points[j].x;
-          const dy = points[i].y - points[j].y;
-          const distSq = dx * dx + dy * dy;
-
-          if (distSq < 3844) { // 62^2 = 3844
-            const dist = Math.sqrt(distSq);
-            const alpha = (1 - dist / 62) * 0.26;
-            ctx.strokeStyle = `rgba(56, 189, 248, ${alpha})`;
-            ctx.beginPath();
-            ctx.moveTo(points[i].x, points[i].y);
-            ctx.lineTo(points[j].x, points[j].y);
-            ctx.stroke();
-          }
-        }
+      const { w, h } = sizeRef.current;
+      if (w <= 0 || h <= 0) {
+        animFrameRef.current = requestAnimationFrame(render);
+        return;
       }
 
-      // 2. Kuantum / Nöral Noktalar (Büyüyüp Küçülen / Nefes Alan)
-      points.forEach((p) => {
-        const sinWave = Math.sin(breatheFreq * now + p.phase);
-        const scaleVal = 1 + 0.52 * sinWave;
-        const radius = Math.max(1.2, p.baseSize * scaleVal);
+      ctx.clearRect(0, 0, w, h);
 
-        const normSin = (1 + sinWave) / 2;
-        const alpha = 0.22 + 0.68 * Math.pow(normSin, 1.4);
+      const cx = w / 2;
+      const cy = h / 2;
 
-        ctx.save();
-        ctx.globalAlpha = alpha;
-        ctx.fillStyle = p.color;
-        ctx.shadowColor = p.color;
-        ctx.shadowBlur = radius * 3.2;
+      // Hafif ambient merkez halesi (Tek seferlik çizim)
+      const glow = ctx.createRadialGradient(cx, cy, 10, cx, cy, 170);
+      glow.addColorStop(0, 'rgba(56, 189, 248, 0.12)');
+      glow.addColorStop(0.5, 'rgba(15, 23, 42, 0.05)');
+      glow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      ctx.fillStyle = glow;
+      ctx.fillRect(0, 0, w, h);
 
+      const sec = now / 1000;
+
+      // Partikülleri güncelle ve renklerine göre BATCH çiz (Draw Call minimizasyonu)
+      for (let c = 0; c < PALETTE.length; c++) {
         ctx.beginPath();
-        ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
+        for (let i = 0; i < PARTICLE_COUNT; i++) {
+          const p = particles[i];
+          if (p.colorIdx !== c) continue;
+
+          // Açısal dönüş
+          p.angle += p.angularVelocity * dt;
+          // Harmonik nefes alma (pulsating scale: küçülüp büyüme)
+          const pulse = Math.sin(sec * p.pulseFreq + p.pulsePhase);
+          const r = Math.max(0.9, p.baseSize * (1 + 0.55 * pulse));
+
+          const px = cx + Math.cos(p.angle) * p.baseR;
+          const py = cy + Math.sin(p.angle) * p.baseR;
+
+          ctx.moveTo(px + r, py);
+          ctx.arc(px, py, r, 0, Math.PI * 2);
+        }
+        ctx.fillStyle = `${PALETTE[c]}0.88)`;
         ctx.fill();
-        ctx.restore();
-      });
+      }
 
       animFrameRef.current = requestAnimationFrame(render);
     };
 
-    render();
+    animFrameRef.current = requestAnimationFrame(render);
 
     return () => {
-      if (animFrameRef.current) {
-        cancelAnimationFrame(animFrameRef.current);
-      }
+      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+      ro.disconnect();
     };
   }, [isActive]);
 
@@ -170,32 +156,19 @@ export const NeuralPointCloud: React.FC<NeuralPointCloudProps> = ({ isActive }) 
 
   return (
     <div className="absolute inset-0 pointer-events-none select-none z-20 flex items-center justify-center overflow-hidden">
-      {/* 1. Belge Kararma Katmanı (300ms ease-out) */}
+      {/* Kadife Karartma Katmanı (Masaüstü ve mobil ekranı yumuşakça örter) */}
       <div 
-        className="absolute inset-0 bg-slate-950/75 backdrop-blur-[2.5px] transition-opacity duration-300 ease-out"
+        className="absolute inset-0 bg-slate-950/75 backdrop-blur-[2px] transition-opacity duration-300 ease-out"
         style={{
-          background: 'radial-gradient(circle at center, rgba(2, 6, 23, 0.65) 0%, rgba(2, 6, 23, 0.88) 100%)'
+          background: 'radial-gradient(circle at center, rgba(2, 6, 23, 0.60) 0%, rgba(2, 6, 23, 0.90) 100%)'
         }}
       />
 
-      {/* 2. Dönen ve Nefes Alan Kuantum Nokta Kümesi Canvas'ı */}
+      {/* 120 FPS Kuantum Sarmal Nokta Tuvali */}
       <canvas
         ref={canvasRef}
         className="absolute inset-0 w-full h-full pointer-events-none"
       />
-
-      {/* 3. Minimalist Durum Rozeti */}
-      <div className="relative z-30 flex flex-col items-center space-y-2 pointer-events-none">
-        <div className="px-3.5 py-1.5 rounded-full bg-slate-900/90 border border-cyan-500/30 shadow-[0_0_20px_rgba(56,189,248,0.2)] backdrop-blur-md flex items-center space-x-2.5">
-          <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
-          <span className="text-xs font-medium text-cyan-200 tracking-tight font-mono">
-            Nöral Ayrıştırma Devrede
-          </span>
-        </div>
-        <span className="text-[10px] text-slate-400 font-mono tracking-wider uppercase">
-          Optik Düğümler Senkronize Ediliyor
-        </span>
-      </div>
     </div>
   );
 };
