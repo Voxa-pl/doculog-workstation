@@ -436,44 +436,6 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
               </span>
             </button>
 
-            {activeView === 'station' && onLayoutModeChange && (
-              <div className="flex items-center justify-between p-1.5 rounded-lg bg-theme-card border border-theme-subtle">
-                <span className="text-[11px] text-theme-muted font-medium px-1">Düzen:</span>
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onLayoutModeChange('collapsible-dock');
-                      setIsMobileMenuOpen(false);
-                    }}
-                    className={`px-2 py-1 rounded text-[10px] font-semibold ${layoutMode === 'collapsible-dock' ? 'bg-blue-600 text-white' : 'text-theme-muted'}`}
-                  >
-                    Ray
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onLayoutModeChange('three-column');
-                      setIsMobileMenuOpen(false);
-                    }}
-                    className={`px-2 py-1 rounded text-[10px] font-semibold ${layoutMode === 'three-column' ? 'bg-blue-600 text-white' : 'text-theme-muted'}`}
-                  >
-                    3 Sütun
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onLayoutModeChange('focus-studio');
-                      setIsMobileMenuOpen(false);
-                    }}
-                    className={`px-2 py-1 rounded text-[10px] font-semibold ${layoutMode === 'focus-studio' ? 'bg-blue-600 text-white' : 'text-theme-muted'}`}
-                  >
-                    Odak
-                  </button>
-                </div>
-              </div>
-            )}
-
             <button
               onClick={() => {
                 onThemeChange?.(theme === 'koyu-kurumsal' ? 'acik-ofis' : 'koyu-kurumsal');

@@ -261,7 +261,7 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
       if (e.key === 'F2') {
         e.preventDefault();
         jumpToNextSuspicious();
-      } else if (e.key === 'Enter' && e.ctrlKey && !isNonInvoice) {
+      } else if (e.key === 'Enter' && (e.ctrlKey || e.altKey) && !isNonInvoice) {
         e.preventDefault();
         handleApproveAndNext(false);
       }

@@ -150,10 +150,10 @@ export const ItemsTable: React.FC<ItemsTableProps> = ({ items, onChange }) => {
                     <button
                       type="button"
                       onClick={() => handleStepQuantity(index, -1)}
-                      className="w-7 h-7 flex items-center justify-center rounded bg-theme-surface border border-theme-subtle text-theme-secondary hover:text-theme-primary active:scale-90 transition-all"
+                      className="w-9 h-9 sm:w-8 sm:h-8 min-w-[36px] min-h-[36px] flex items-center justify-center rounded-lg bg-theme-surface hover:bg-theme-card border border-theme-subtle text-theme-secondary hover:text-theme-primary active:scale-90 transition-all touch-manipulation shadow-xs"
                       title="1 Azalt"
                     >
-                      <Minus className="w-3 h-3" />
+                      <Minus className="w-3.5 h-3.5" />
                     </button>
 
                     {/* Miktar Girişi (Virgül ve Nokta Uyumlu) */}
@@ -171,17 +171,17 @@ export const ItemsTable: React.FC<ItemsTableProps> = ({ items, onChange }) => {
                         }
                       }}
                       placeholder="0"
-                      className="w-16 sm:w-20 text-center font-mono font-bold text-xs bg-theme-surface border border-theme-subtle focus:border-blue-500 rounded px-1.5 py-1 text-blue-400 outline-none tabular-nums"
+                      className="w-16 sm:w-20 min-h-[36px] text-center font-mono font-bold text-xs bg-theme-surface border border-theme-subtle focus:border-blue-500 rounded-lg px-1.5 py-1 text-blue-400 outline-none tabular-nums"
                     />
 
                     {/* Hızlı Arttır (+) */}
                     <button
                       type="button"
                       onClick={() => handleStepQuantity(index, 1)}
-                      className="w-7 h-7 flex items-center justify-center rounded bg-theme-surface border border-theme-subtle text-theme-secondary hover:text-theme-primary active:scale-90 transition-all"
+                      className="w-9 h-9 sm:w-8 sm:h-8 min-w-[36px] min-h-[36px] flex items-center justify-center rounded-lg bg-theme-surface hover:bg-theme-card border border-theme-subtle text-theme-secondary hover:text-theme-primary active:scale-90 transition-all touch-manipulation shadow-xs"
                       title="1 Arttır"
                     >
-                      <Plus className="w-3 h-3" />
+                      <Plus className="w-3.5 h-3.5" />
                     </button>
 
                     {/* Birim Seçici */}
