@@ -24,6 +24,21 @@ class DocumentModel(Base):
     guncellenme_ts = Column(Integer, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
+class ProductAliasModel(Base):
+    """
+    Kullanıcı / Operatör düzeltmelerinden öğrenen dinamik ürün ve terim hafızası.
+    Nokta vuruşlu yazıcı bozulmalarını (Örn: 'püskür' -> 'Petibör') ve sektörel varyantları saklar.
+    """
+    __tablename__ = "product_aliases"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    raw_pattern = Column(String(255), unique=True, index=True, nullable=False)  # Normalize edilmiş ham okuma (küçük harf)
+    normalized_name = Column(String(255), nullable=False)                       # Doğrulanmış kurumsal ürün adı
+    kategori = Column(String(64), nullable=True, default="fmcg_gida")            # Kategori etiketi
+    confidence = Column(Float, default=1.0)                                     # Güven katsayısı
+    usage_count = Column(Integer, default=1)                                    # Düzeltilme / kullanılma sıklığı
+    created_at = Column(DateTime, default=datetime.utcnow)
+
 DB_PATH = settings.BACKEND_DIR / "doculog.db"
 engine = create_engine(
     f"sqlite:///{DB_PATH}",

@@ -16,6 +16,7 @@ from google.genai import types, errors
 from ..core.config import settings
 from ..models.irsaliye import IrsaliyeData, IrsaliyeHeader, LineItem
 from .image_processor import image_processor
+from .product_normalizer import product_normalizer
 
 logger = logging.getLogger(__name__)
 
@@ -59,8 +60,18 @@ TÜRKİYE LOJİSTİK VE İRSALİYE KURALLARI:
    - birim: Standart Türk lojistik birimleri (Adet, Koli, Palet, Kg, Ton, Çuval, Bağ, Kutu, Paket, Teneke, Metre). Ürün cinsi içinde 'Kg', 'Ton', 'Palet' açıkça belirtilmişse varsayılan 'Adet' atama!
    - birim_fiyat ve tutar: Belirtilmişse al, yoksa null bırak.
    - KESİNLİKLE 'NAKLİ YEKÛN', 'ÖNCEKİ SAYFADAN DEVİR' veya 'ARA TOPLAM' satırlarını bağımsız ürün kalemi olarak ekleme!
-7. NOKTA VURUŞLU (DOT-MATRIX) YAZICI VE KARBON NÜSHA KAYMALARI:
-   - İğneli yazıcılardan basılmış formlarda başlık veya miktar kaymalarını doğru sütunla eşleştir; formun matbu şablon yazılarıyla dinamik doldurulmuş verileri birbirine karıştırma.
+7. NOKTA VURUŞLU (DOT-MATRIX) YAZICI, SİLİK ŞERİT VE HARF DEFORMASYONLARI:
+   - İğneli (nokta vuruşlu) yazıcı şeritleri eskidikçe iğne vuruşları silikleşir veya pikseller birbirine kaynar.
+   - Sık yapılan optik harf karışıklıklarına özellikle dikkat et:
+     * 'b' harfi üst iğnesi silikse 'k' veya 'h' gibi görünebilir ('petibör' yerine 'püskür' OKUMAK KABUL EDİLEMEZ BİR HATADIR!).
+     * 'et' harfleri birbirine yaklaşıp 'üs' gibi algılanabilir.
+     * 'ö' / 'ü' noktaları silikleşip 'o' / 'u' olabilir veya tam tersi.
+     * 'rn' harfleri 'm' ile, 'cl' harfleri 'd' ile, 'li' harfleri 'h' ile, 'vv' harfleri 'w' ile karışabilir.
+     * '1', 'I', 'l', '|' ve 'i' ayrımına dikkat et.
+   - KESİNLİKLE FONETİK HALÜSİNASYON ÜRETME:
+     * Görseldeki silik veya bozuk harfleri Türkçede ve ticari piyasada (FMCG, gıda, hırdavat, sanayi, ambalaj) karşılığı olmayan anlamsız veya uydurma kelimelere dönüştürme! (Örn: 'Ülker Petibör' ibaresini 'Püskür' veya 'Püsküt' diye okumak kabul edilemez!).
+     * Harfler deforme olsa dahi bağlamdan, bilinen ticari marka ve ürün adlarından (Örn: Ülker, Eti, Pınar, Sütaş, Torku, Doğuş, Çaykur, Şölen, Hayat, Nestle vb. gıda ürünleri; Henkel, Unilever, P&G, Hayat Kimya temizlik ürünleri; vb.) faydalanarak doğru ve geçerli ürün adını belirle.
+     * Eğer harfler tamamen deforme ve belirsizse, uydurma kelime yazmak yerine en olası bilinen ticari karşılığını veya okunaklı kısımları yaz.
 8. EL YAZILARI, AMBAR KAŞE VE İMZALARI:
    - Şoför veya ambar şefinin düştüğü hukuki teslimat şerhlerini (Örn: '2 koli hasarlı teslim alındı', 'Islak ambalaj', 'Eksiksiz kabul', 'Kaşe ve imza mevcut') genel_notlar alanına eksiksiz yaz.
 9. OKUNABİLİRLİK VE GÜVEN:
@@ -153,6 +164,8 @@ class GeminiExtractor:
                         fallback.genel_notlar = ettn_str
                     elif qr_data_obj.ettn not in fallback.genel_notlar:
                         fallback.genel_notlar = f"{fallback.genel_notlar} | {ettn_str}"
+            if fallback.kalemler:
+                fallback.kalemler = product_normalizer.normalize_items(fallback.kalemler)
             return fallback
 
         try:
@@ -303,6 +316,8 @@ class GeminiExtractor:
                 # Çok sayfalı irsaliyelerde mükerrer ara toplam / nakli yekûn satırlarını temizle
                 if validated_data.kalemler:
                     validated_data.kalemler = self._filter_subtotal_rows(validated_data.kalemler)
+                    # Nokta vuruşlu yazıcı ve OCR harf bozulmalarını master katalog ve öğrenilmiş hafızayla düzelt
+                    validated_data.kalemler = product_normalizer.normalize_items(validated_data.kalemler)
 
                 # Deterministik GİB Modulo-10 ve matematiksel mutabakat kalibrasyonu
                 validated_data = self._calibrate_confidence_scores(validated_data, has_qr=bool(qr_data_obj))

@@ -45,6 +45,7 @@ from ..services.uetds import generate_uetds_payload, generate_uetds_xml
 from ..services.queue_manager import queue_manager, GLOBAL_AI_SEMAPHORE
 from ..services.backup_service import backup_service
 from ..services.erp_linter import erp_linter
+from ..services.product_normalizer import product_normalizer
 
 router = APIRouter()
 
@@ -335,6 +336,8 @@ def _run_ai_extraction(doc_id: str):
             mime_type=doc.mime_type,
             additional_pages=add_pages
         )
+        if extracted_data and extracted_data.kalemler:
+            extracted_data.kalemler = product_normalizer.normalize_items(extracted_data.kalemler)
         doc.veri = extracted_data
         doc.durum = ProcessingStatus.TAMAMLANDI
         doc.hata_mesaji = None
@@ -544,6 +547,17 @@ async def update_document_data(doc_id: str, req: DocumentUpdateRequest):
     if req.header is not None:
         doc.veri.header = req.header
     if req.kalemler is not None:
+        # Self-Learning Alias Engine: Operatörün yaptığı düzeltmeleri tespit edip kalıcı hafızaya kaydet
+        if doc.veri and doc.veri.kalemler:
+            old_items_map = {item.sira_no or idx: item.mal_hizmet for idx, item in enumerate(doc.veri.kalemler, 1)}
+            for idx, new_item in enumerate(req.kalemler, 1):
+                key = new_item.sira_no or idx
+                old_name = old_items_map.get(key)
+                if old_name and new_item.mal_hizmet and old_name.strip() != new_item.mal_hizmet.strip():
+                    product_normalizer.record_user_correction(
+                        raw_name=old_name,
+                        corrected_name=new_item.mal_hizmet
+                    )
         doc.veri.kalemler = req.kalemler
     if req.genel_toplam_miktar is not None:
         doc.veri.genel_toplam_miktar = req.genel_toplam_miktar
@@ -1080,5 +1094,46 @@ async def download_backup(filename: str):
         media_type="application/gzip",
         filename=backup_file.name
     )
+
+class AliasCreateRequest(BaseModel):
+    raw_pattern: str
+    normalized_name: str
+    kategori: Optional[str] = "fmcg_gida"
+
+@router.get("/catalog/aliases")
+async def get_product_aliases():
+    """Tüm yerleşik ve operatörden öğrenilmiş ürün/terim eşleştirmelerini listeler."""
+    return product_normalizer.get_all_aliases()
+
+@router.post("/catalog/aliases")
+async def create_product_alias(req: AliasCreateRequest):
+    """Operatör tarafından manuel bir terim/ürün eşleştirmesi tanımlanır."""
+    if not req.raw_pattern or not req.normalized_name:
+        raise HTTPException(status_code=400, detail="Ham okuma kalıbı ve hedef isim boş olamaz.")
+    product_normalizer.record_user_correction(
+        raw_name=req.raw_pattern,
+        corrected_name=req.normalized_name,
+        category=req.kategori or "fmcg_gida"
+    )
+    return {"mesaj": "Ürün eşleştirmesi hafızaya kaydedildi", "data": req}
+
+@router.delete("/catalog/aliases/{alias_id}")
+async def delete_product_alias(alias_id: int):
+    """Öğrenilmiş bir ürün eşleştirmesini hafızadan siler."""
+    from ..models.db import SessionLocal, ProductAliasModel
+    db = SessionLocal()
+    try:
+        rec = db.query(ProductAliasModel).filter(ProductAliasModel.id == alias_id).first()
+        if not rec:
+            raise HTTPException(status_code=404, detail="Eşleştirme kaydı bulunamadı.")
+        raw_key = rec.raw_pattern
+        db.delete(rec)
+        db.commit()
+        with product_normalizer._lock:
+            product_normalizer._dynamic_aliases.pop(raw_key, None)
+        return {"mesaj": "Kural silindi", "id": alias_id}
+    finally:
+        db.close()
+
 
 
