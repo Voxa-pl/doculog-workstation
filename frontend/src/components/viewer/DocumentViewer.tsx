@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { DocumentItem } from '../../types/irsaliye';
 import { ViewerToolbar } from './ViewerToolbar';
+import { NeuralPointCloud } from './NeuralPointCloud';
 import { documentApi } from '../../services/api';
 import { 
   FileQuestion, 
@@ -520,10 +521,8 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
                 style={{ pointerEvents: 'none' }}
                 draggable={false}
               />
-              {/* Doğal ve minimalist cam filtre (İşlem esnasında hafif sükunet) */}
-              {isProcessing && (
-                <div className="absolute inset-0 pointer-events-none rounded bg-slate-950/15 backdrop-blur-[0.5px] transition-opacity duration-300" />
-              )}
+              {/* Kuantum/Nöral Nokta Kümesi (Evrak kararması ve nefes alan dönen noktalar) */}
+              <NeuralPointCloud isActive={isProcessing} />
             </div>
           </div>
         )}

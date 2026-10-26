@@ -38,6 +38,7 @@ import {
 } from 'lucide-react';
 import { documentApi } from '../../services/api';
 import { parseTurkishNumber, formatTurkishNumber } from '../../utils/number';
+import { RollingNumber } from '../common/RollingNumber';
 
 // Web Audio API Low-Frequency Haptic Pulse
 const playCadenceHaptic = () => {
@@ -838,16 +839,16 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
                 <span className="flex items-center space-x-1 text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-md font-mono text-[10px]" title="Kalemler toplamı ile irsaliye dip toplamı tam eşleşiyor">
                   <CheckCheck className="w-3 h-3 text-emerald-400" />
                   <span className="hidden sm:inline">Dip:</span>
-                  <span>{totalCalculatedQty.toLocaleString('tr-TR')} Ad.</span>
+                  <span><RollingNumber value={totalCalculatedQty} /> Ad.</span>
                 </span>
               ) : isMathDiscrepancy ? (
                 <span className="flex items-center space-x-1 text-amber-300 bg-amber-500/15 border border-amber-500/30 px-2 py-0.5 rounded-md font-mono text-[10px] animate-pulse" title={`Kalemler (${totalCalculatedQty.toLocaleString('tr-TR')}) ≠ İrsaliye (${parsedDocTotalQty?.toLocaleString('tr-TR')})`}>
                   <AlertTriangle className="w-3 h-3 text-amber-400" />
-                  <span>Fark: {Math.abs(totalCalculatedQty - (parsedDocTotalQty || 0)).toLocaleString('tr-TR')}</span>
+                  <span>Fark: <RollingNumber value={Math.abs(totalCalculatedQty - (parsedDocTotalQty || 0))} /></span>
                 </span>
               ) : totalCalculatedQty > 0 ? (
                 <span className="font-mono text-[10px] text-theme-muted bg-theme-card px-2 py-0.5 rounded border border-theme-subtle">
-                  {totalCalculatedQty.toLocaleString('tr-TR')} Ad.
+                  <RollingNumber value={totalCalculatedQty} /> Ad.
                 </span>
               ) : null}
 
