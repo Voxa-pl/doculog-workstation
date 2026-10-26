@@ -8,58 +8,75 @@ interface ProgressiveTileRenderProps {
 interface BucketPos {
   row: number;
   col: number;
+  xPct: number;
+  yPct: number;
   touchdownId: number;
 }
 
+const COLS = 10;
+const ROWS = 14;
+const TOTAL_TILES = COLS * ROWS; // 140 Mikro-Karo
+
 /**
- * DocuLog - Ultra-Kinetic Dual-Core Roving Bucket Render Engine
- * 
- * 1000x Daha Havalı & Sinematik Hareket Mimarisi:
- * 1. Motion Ghosting (110ms fotonik kova kuyruğu ve ivme izi)
- * 2. 120 FPS Micro Laser Raster Blade (Kovanın indiği karoda dikey lazer taraması)
- * 3. Mekansal Işık Difüzyonu (320ms komşu karolara taşan foton kanaması)
- * 4. Çift Çekirdekli Bağımsız Sensörler: S1 • HDR (Üstbilgi) & S2 • VTX (Kalem Matrisi)
- * 5. Global Anamorfik Diyafram Flaşı (340ms sinematik kilitlenme dalgası)
- * 6. Sıfır Reflow, 120 FPS kilitli GPU Compositor performansı
+ * 10 Sütun x 14 Satır = 140 Mikro-Karo için Salyangoz Kabuğu (Inward Nautilus G-Spiral) Algoritması
+ * Dış çeperden başlayarak saat yönünde (Clockwise Inward Vortex) 5 konsantrik halka halinde merkeze iner.
  */
+function generateInwardSpiralOrder(rows: number, cols: number): number[] {
+  const result: number[] = new Array(rows * cols);
+  let idx = 0;
+  let top = 0;
+  let bottom = rows - 1;
+  let left = 0;
+  let right = cols - 1;
+
+  while (top <= bottom && left <= right) {
+    // 1. Üst Kenar: Soldan Sağa
+    for (let c = left; c <= right; c++) result[idx++] = top * cols + c;
+    top++;
+
+    // 2. Sağ Kenar: Yukarıdan Aşağıya
+    for (let r = top; r <= bottom; r++) result[idx++] = r * cols + right;
+    right--;
+
+    // 3. Alt Kenar: Sağdan Sola
+    if (top <= bottom) {
+      for (let c = right; c >= left; c--) result[idx++] = bottom * cols + c;
+      bottom--;
+    }
+
+    // 4. Sol Kenar: Aşağıdan Yukarıya
+    if (left <= right) {
+      for (let r = bottom; r >= top; r--) result[idx++] = r * cols + left;
+      left++;
+    }
+  }
+
+  return result;
+}
+
 export const ProgressiveTileRender: React.FC<ProgressiveTileRenderProps> = ({
   isActive,
   onComplete,
 }) => {
   const [resolvedTiles, setResolvedTiles] = useState<Set<number>>(() => new Set());
   const [bloomingTiles, setBloomingTiles] = useState<Set<number>>(() => new Set());
-  const [bucket1, setBucket1] = useState<BucketPos>({ row: 0, col: 0, touchdownId: 0 });
-  const [bucket2, setBucket2] = useState<BucketPos>({ row: 4, col: 0, touchdownId: 0 });
   const [isFinishing, setIsFinishing] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
 
-  // 6x8 = 48 Karo için Serpentine Çözülme Dizilimi
-  const { bucketAOrder, bucketBOrder } = useMemo(() => {
-    const orderA: number[] = [];
-    for (let r = 0; r < 4; r++) {
-      const row = [];
-      for (let c = 0; c < 6; c++) row.push(r * 6 + c);
-      if (r % 2 === 1) row.reverse();
-      orderA.push(...row);
-    }
+  // 140 Karolu Salyangoz Sarmalı Dizilimi (O(1) useMemo Önbelleği)
+  const spiralOrder = useMemo(() => generateInwardSpiralOrder(ROWS, COLS), []);
 
-    const orderB: number[] = [];
-    for (let r = 4; r < 8; r++) {
-      const row = [];
-      for (let c = 0; c < 6; c++) row.push(r * 6 + c);
-      if (r % 2 === 1) row.reverse();
-      orderB.push(...row);
-    }
-
-    return { bucketAOrder: orderA, bucketBOrder: orderB };
-  }, []);
+  // 4'lü Kuantum Kova Filosu (α: Cyan, β: Indigo, γ: Emerald, δ: Amber)
+  const [bucketAlpha, setBucketAlpha] = useState<BucketPos>({ row: 0, col: 0, xPct: 5, yPct: 3.57, touchdownId: 0 });
+  const [bucketBeta, setBucketBeta] = useState<BucketPos>({ row: 0, col: 0, xPct: 5, yPct: 3.57, touchdownId: 0 });
+  const [bucketGamma, setBucketGamma] = useState<BucketPos>({ row: 0, col: 0, xPct: 5, yPct: 3.57, touchdownId: 0 });
+  const [bucketDelta, setBucketDelta] = useState<BucketPos>({ row: 0, col: 0, xPct: 5, yPct: 3.57, touchdownId: 0 });
 
   const startTimeRef = useRef<number>(0);
   const animFrameRef = useRef<number | null>(null);
   const currentStepRef = useRef<number>(0);
   const touchdownCounterRef = useRef<number>(1);
 
-  // 1. Asimptotik Organik İlerleme Motoru (Asymptotic Progress Engine)
   useEffect(() => {
     if (isActive) {
       setIsVisible(true);
@@ -73,49 +90,81 @@ export const ProgressiveTileRender: React.FC<ProgressiveTileRenderProps> = ({
       const tick = (now: number) => {
         const elapsedSec = (now - startTimeRef.current) / 1000;
 
-        // Logaritmik Doygunluk Eğrisi
+        // Asimptotik Organik İlerleme Eğrisi (1s - 8s Canlı İlerleme)
         let progress = 0;
-        if (elapsedSec <= 1.0) {
-          // Faz 1: Hızlı Ön Algılama (%0 -> %35)
-          progress = 0.35 * (elapsedSec / 1.0);
-        } else if (elapsedSec <= 3.5) {
-          // Faz 2: Dengeli Matris Taraması (%35 -> %80)
-          progress = 0.35 + 0.45 * ((elapsedSec - 1.0) / 2.5);
+        if (elapsedSec <= 0.9) {
+          // Faz 1: Dış Çeper Sarmal Hortum Hızı (%0 -> %32 - Halka 0 & 1)
+          progress = 0.32 * (elapsedSec / 0.9);
+        } else if (elapsedSec <= 3.2) {
+          // Faz 2: Gövde Matris Sarmalı (%32 -> %82 - Halka 2 & 3)
+          progress = 0.32 + 0.50 * ((elapsedSec - 0.9) / 2.3);
         } else {
-          // Faz 3: Asimptotik Canlı Kuyruk (%80 -> %96+) - Kovalar asla durmaz!
-          progress = 0.80 + 0.17 * (1 - Math.exp(-(elapsedSec - 3.5) / 3.0));
+          // Faz 3: Asimptotik Çekirdek Canlı Kuyruk (%82 -> %98 - Halka 4 & 5 Çekirdek)
+          progress = 0.82 + 0.16 * (1 - Math.exp(-(elapsedSec - 3.2) / 3.0));
         }
 
-        const targetStep = Math.min(23, Math.floor(progress * 24));
+        const targetStep = Math.min(TOTAL_TILES - 1, Math.floor(progress * TOTAL_TILES));
 
         if (targetStep > currentStepRef.current) {
           const newResolved: number[] = [];
           touchdownCounterRef.current++;
-          const currentTouchdown = touchdownCounterRef.current;
+          const tId = touchdownCounterRef.current;
 
           for (let s = currentStepRef.current; s <= targetStep; s++) {
-            const tileA = bucketAOrder[s];
-            const tileB = bucketBOrder[s];
-            if (tileA !== undefined) newResolved.push(tileA);
-            if (tileB !== undefined) newResolved.push(tileB);
-
-            if (tileA !== undefined) {
-              setBucket1({
-                row: Math.floor(tileA / 6),
-                col: tileA % 6,
-                touchdownId: currentTouchdown,
-              });
-            }
-            if (tileB !== undefined) {
-              setBucket2({
-                row: Math.floor(tileB / 6),
-                col: tileB % 6,
-                touchdownId: currentTouchdown,
-              });
-            }
+            const tileIdx = spiralOrder[s];
+            if (tileIdx !== undefined) newResolved.push(tileIdx);
           }
 
           currentStepRef.current = targetStep;
+
+          // 4 Kovanın Sarmal Hat Üzerindeki Faz Farklı Konumları (0, 4, 9, 15 Adım Ofset)
+          const stepA = targetStep;
+          const idxA = spiralOrder[stepA] ?? 0;
+          const rA = Math.floor(idxA / COLS);
+          const cA = idxA % COLS;
+          setBucketAlpha({
+            row: rA,
+            col: cA,
+            xPct: (cA + 0.5) * 10,
+            yPct: (rA + 0.5) * (100 / ROWS),
+            touchdownId: tId,
+          });
+
+          const stepB = Math.max(0, targetStep - 4);
+          const idxB = spiralOrder[stepB] ?? 0;
+          const rB = Math.floor(idxB / COLS);
+          const cB = idxB % COLS;
+          setBucketBeta({
+            row: rB,
+            col: cB,
+            xPct: (cB + 0.5) * 10,
+            yPct: (rB + 0.5) * (100 / ROWS),
+            touchdownId: tId,
+          });
+
+          const stepG = Math.max(0, targetStep - 9);
+          const idxG = spiralOrder[stepG] ?? 0;
+          const rG = Math.floor(idxG / COLS);
+          const cG = idxG % COLS;
+          setBucketGamma({
+            row: rG,
+            col: cG,
+            xPct: (cG + 0.5) * 10,
+            yPct: (rG + 0.5) * (100 / ROWS),
+            touchdownId: tId,
+          });
+
+          const stepD = Math.max(0, targetStep - 15);
+          const idxD = spiralOrder[stepD] ?? 0;
+          const rD = Math.floor(idxD / COLS);
+          const cD = idxD % COLS;
+          setBucketDelta({
+            row: rD,
+            col: cD,
+            xPct: (cD + 0.5) * 10,
+            yPct: (rD + 0.5) * (100 / ROWS),
+            touchdownId: tId,
+          });
 
           setBloomingTiles((prev) => {
             const next = new Set(prev);
@@ -129,14 +178,14 @@ export const ProgressiveTileRender: React.FC<ProgressiveTileRenderProps> = ({
             return next;
           });
 
-          // 320ms sonra fosfor difüzyonunu söndür
+          // 240ms sonra fosfor difüzyonunu söndür
           setTimeout(() => {
             setBloomingTiles((prev) => {
               const next = new Set(prev);
               newResolved.forEach((t) => next.delete(t));
               return next;
             });
-          }, 320);
+          }, 240);
         }
 
         animFrameRef.current = requestAnimationFrame(tick);
@@ -150,15 +199,14 @@ export const ProgressiveTileRender: React.FC<ProgressiveTileRenderProps> = ({
         }
       };
     } else if (isVisible && !isFinishing) {
-      // 2. Final Kristalizasyon Dalgası: Global Anamorfik Flaş
+      // Backend Yanıtı Geldiği An: Final Global Anamorfik Flaş & Kristal Kapanış
       if (animFrameRef.current) {
         cancelAnimationFrame(animFrameRef.current);
       }
       setIsFinishing(true);
 
-      // Kalan tüm karoları çöz
       const allTiles = new Set<number>();
-      for (let i = 0; i < 48; i++) allTiles.add(i);
+      for (let i = 0; i < TOTAL_TILES; i++) allTiles.add(i);
       setResolvedTiles(allTiles);
 
       const finishTimer = setTimeout(() => {
@@ -169,149 +217,211 @@ export const ProgressiveTileRender: React.FC<ProgressiveTileRenderProps> = ({
 
       return () => clearTimeout(finishTimer);
     }
-  }, [isActive, isVisible, isFinishing, bucketAOrder, bucketBOrder, onComplete]);
+  }, [isActive, isVisible, isFinishing, spiralOrder, onComplete]);
 
   if (!isVisible) return null;
 
+  // 4 Kovanın SVG Poligon Koordinatları
+  const polygonPoints = `${bucketAlpha.xPct},${bucketAlpha.yPct} ${bucketBeta.xPct},${bucketBeta.yPct} ${bucketGamma.xPct},${bucketGamma.yPct} ${bucketDelta.xPct},${bucketDelta.yPct}`;
+
   return (
-    <div className={`absolute inset-0 z-20 pointer-events-none select-none overflow-hidden rounded transition-opacity duration-300 ${
-      isFinishing ? 'pointer-events-none' : 'opacity-100'
-    }`}>
-      {/* 1. 48 Karo Spektral Izgara */}
-      <div className="w-full h-full tile-grid-container relative">
-        {Array.from({ length: 48 }).map((_, idx) => {
+    <div
+      className={`absolute inset-0 z-20 pointer-events-none select-none overflow-hidden rounded transition-opacity duration-300 ${
+        isFinishing ? 'pointer-events-none' : 'opacity-100'
+      }`}
+      style={{ contain: 'strict' }}
+    >
+      {/* 1. 140 Mikro-Karo Spektral Salyangoz Izgarası (10 Sütun x 14 Satır) */}
+      <div className="w-full h-full spiral-tile-grid relative">
+        {Array.from({ length: TOTAL_TILES }).map((_, idx) => {
           const isResolved = resolvedTiles.has(idx);
           const isBlooming = bloomingTiles.has(idx);
 
           return (
             <div
               key={idx}
-              className={`render-tile ${isResolved ? 'resolved' : 'unresolved'} ${
+              className={`render-tile-micro ${isResolved ? 'resolved' : 'unresolved'} ${
                 isBlooming ? 'tile-phosphor-bloom' : ''
               }`}
             >
-              {/* Çözülmemiş karo içinde mikro CAD topoğrafya artı işareti */}
+              {/* Çözülmemiş mikro-karo içinde CAD topoğrafya artı işareti */}
               {!isResolved && (
-                <div className="absolute inset-0 flex items-center justify-center opacity-20 pointer-events-none">
-                  <span className="text-[7px] font-mono text-cyan-300 leading-none select-none">+</span>
+                <div className="absolute inset-0 flex items-center justify-center opacity-15 pointer-events-none">
+                  <span className="text-[6px] font-mono text-cyan-300 leading-none select-none">+</span>
                 </div>
               )}
             </div>
           );
         })}
 
-        {/* 2. Kovalar Arası Kuantum Lazer Vektörü (Inter-Bucket Optical Beam) */}
+        {/* 2. Dinamik SVG Kuantum Lazer Poligonu (4 Kova Arası Işık Vektörleri) */}
         {!isFinishing && (
-          <svg className="absolute inset-0 w-full h-full pointer-events-none z-24">
-            <line
-              x1={`${((bucket1.col + 0.5) / 6) * 100}%`}
-              y1={`${((bucket1.row + 0.5) / 8) * 100}%`}
-              x2={`${((bucket2.col + 0.5) / 6) * 100}%`}
-              y2={`${((bucket2.row + 0.5) / 8) * 100}%`}
-              stroke="url(#interBucketBeam)"
-              strokeWidth="1.2"
-              strokeDasharray="4 3"
+          <svg
+            className="absolute inset-0 w-full h-full pointer-events-none z-24"
+            viewBox="0 0 100 100"
+            preserveAspectRatio="none"
+          >
+            {/* Lazer Poligonu Çerçeve ve İç Işıma */}
+            <polygon
+              points={polygonPoints}
+              fill="rgba(56, 189, 248, 0.05)"
+              stroke="rgba(56, 189, 248, 0.45)"
+              strokeWidth="0.5"
+              strokeDasharray="2 1.5"
               className="animate-pulse"
             />
-            <defs>
-              <linearGradient id="interBucketBeam" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.65" />
-                <stop offset="50%" stopColor="#ffffff" stopOpacity="0.9" />
-                <stop offset="100%" stopColor="#818cf8" stopOpacity="0.65" />
-              </linearGradient>
-            </defs>
+            {/* Çapraz Kuantum Lazer Bağlantıları */}
+            <line
+              x1={`${bucketAlpha.xPct}%`}
+              y1={`${bucketAlpha.yPct}%`}
+              x2={`${bucketGamma.xPct}%`}
+              y2={`${bucketGamma.yPct}%`}
+              stroke="rgba(52, 211, 153, 0.45)"
+              strokeWidth="0.4"
+              strokeDasharray="1.5 1"
+            />
+            <line
+              x1={`${bucketBeta.xPct}%`}
+              y1={`${bucketBeta.yPct}%`}
+              x2={`${bucketDelta.xPct}%`}
+              y2={`${bucketDelta.yPct}%`}
+              stroke="rgba(129, 140, 248, 0.45)"
+              strokeWidth="0.4"
+              strokeDasharray="1.5 1"
+            />
           </svg>
         )}
 
-        {/* 3. Sensör 1: α • LiDAR Aperture (Üstbilgi ve Belge Çekirdeği) */}
+        {/* 3. 4'lü Roving Bucket Filosu (translate3d ile 120 FPS Sub-Pixel Akıcı) */}
         {!isFinishing && (
-          <div
-            className="roving-bucket roving-bucket-alpha"
-            style={{
-              left: `${(bucket1.col / 6) * 100}%`,
-              top: `${(bucket1.row / 8) * 100}%`,
-              width: `${(1 / 6) * 100}%`,
-              height: `${(1 / 8) * 100}%`,
-            }}
-          >
-            {/* Hareket İzi / Hayalet Kuyruk (Motion Ghosting) */}
-            <div className="bucket-motion-ghost" />
-            
-            {/* L-Köşe Hassasiyet Braketleri */}
-            <span className="bucket-bracket bucket-bracket-tl" />
-            <span className="bucket-bracket-tr" />
-            <span className="bucket-bracket-bl" />
-            <span className="bucket-bracket-br" />
+          <>
+            {/* Kova α (Alpha - Öncü Cyan Lazer) */}
+            <div
+              className="roving-bucket roving-bucket-alpha"
+              style={{
+                width: '10%',
+                height: `${100 / ROWS}%`,
+                transform: `translate3d(${bucketAlpha.col * 100}%, ${bucketAlpha.row * 100}%, 0)`,
+              }}
+            >
+              <div className="bucket-motion-ghost bucket-motion-ghost-alpha" />
+              <span className="bucket-bracket bucket-bracket-tl text-cyan-400" />
+              <span className="bucket-bracket-tr text-cyan-400" />
+              <span className="bucket-bracket-bl text-cyan-400" />
+              <span className="bucket-bracket-br text-cyan-400" />
 
-            {/* Sensör Kimlik Rozeti & Canlı Koordinat Damgası */}
-            <div className="absolute top-0.5 left-0.5 px-1 py-0.2 bg-slate-950/90 rounded-br border-b border-r border-cyan-400/50 text-[7.5px] font-mono font-bold text-cyan-300 leading-none tracking-tight flex items-center space-x-1 shadow-sm">
-              <span className="w-1 h-1 rounded-full bg-cyan-400 animate-ping inline-block" />
-              <span>α • [{bucket1.row}:{bucket1.col}]</span>
-            </div>
-
-            {/* Dikey Yüksek Hızlı Lazer Tarama Bıçağı (140ms Sweep) */}
-            <div 
-              key={`laser-1-${bucket1.touchdownId}`} 
-              className="bucket-laser-blade" 
-            />
-
-            {/* Dönen Optik Hedefleme Artısı (Center Reticle) */}
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <div className="w-2.5 h-2.5 rounded-full border border-cyan-400/50 flex items-center justify-center animate-spin" style={{ animationDuration: '4s' }}>
-                <div className="w-0.5 h-0.5 rounded-full bg-cyan-300 shadow-[0_0_4px_#38bdf8]" />
+              <div className="absolute top-0 left-0 px-0.5 py-0.2 bg-slate-950/90 rounded-br border-b border-r border-cyan-400/50 text-[6.5px] font-mono font-bold text-cyan-300 leading-none flex items-center space-x-0.5">
+                <span className="w-1 h-1 rounded-full bg-cyan-400 animate-ping inline-block" />
+                <span>α • [{bucketAlpha.row}:{bucketAlpha.col}]</span>
               </div>
+
+              <div key={`laser-alpha-${bucketAlpha.touchdownId}`} className="bucket-laser-blade bucket-laser-blade-alpha" />
+
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <div className="w-2 h-2 rounded-full border border-cyan-400/50 flex items-center justify-center animate-spin" style={{ animationDuration: '4s' }}>
+                  <div className="w-0.5 h-0.5 rounded-full bg-cyan-300 shadow-[0_0_4px_#38bdf8]" />
+                </div>
+              </div>
+
+              <div className="w-full h-full bucket-sampling-glow bucket-sampling-glow-alpha" />
             </div>
 
-            {/* Kova Odak Parıltısı */}
-            <div className="w-full h-full bucket-sampling-glow" />
-          </div>
+            {/* Kova β (Beta - Safir Mavi / Deep Indigo Analizci) */}
+            <div
+              className="roving-bucket roving-bucket-beta"
+              style={{
+                width: '10%',
+                height: `${100 / ROWS}%`,
+                transform: `translate3d(${bucketBeta.col * 100}%, ${bucketBeta.row * 100}%, 0)`,
+              }}
+            >
+              <div className="bucket-motion-ghost bucket-motion-ghost-beta" />
+              <span className="bucket-bracket bucket-bracket-tl text-indigo-400" />
+              <span className="bucket-bracket-tr text-indigo-400" />
+              <span className="bucket-bracket-bl text-indigo-400" />
+              <span className="bucket-bracket-br text-indigo-400" />
+
+              <div className="absolute top-0 left-0 px-0.5 py-0.2 bg-slate-950/90 rounded-br border-b border-r border-indigo-400/50 text-[6.5px] font-mono font-bold text-indigo-300 leading-none flex items-center space-x-0.5">
+                <span className="w-1 h-1 rounded-full bg-indigo-400 animate-ping inline-block" />
+                <span>β • [{bucketBeta.row}:{bucketBeta.col}]</span>
+              </div>
+
+              <div key={`laser-beta-${bucketBeta.touchdownId}`} className="bucket-laser-blade bucket-laser-blade-beta" />
+
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <div className="w-2 h-2 rounded-full border border-indigo-400/50 flex items-center justify-center animate-spin" style={{ animationDuration: '4s' }}>
+                  <div className="w-0.5 h-0.5 rounded-full bg-indigo-300 shadow-[0_0_4px_#818cf8]" />
+                </div>
+              </div>
+
+              <div className="w-full h-full bucket-sampling-glow bucket-sampling-glow-beta" />
+            </div>
+
+            {/* Kova γ (Gamma - Aurora Zümrüt / Emerald Matris Doğrulayıcı) */}
+            <div
+              className="roving-bucket roving-bucket-gamma"
+              style={{
+                width: '10%',
+                height: `${100 / ROWS}%`,
+                transform: `translate3d(${bucketGamma.col * 100}%, ${bucketGamma.row * 100}%, 0)`,
+              }}
+            >
+              <div className="bucket-motion-ghost bucket-motion-ghost-gamma" />
+              <span className="bucket-bracket bucket-bracket-tl text-emerald-400" />
+              <span className="bucket-bracket-tr text-emerald-400" />
+              <span className="bucket-bracket-bl text-emerald-400" />
+              <span className="bucket-bracket-br text-emerald-400" />
+
+              <div className="absolute top-0 left-0 px-0.5 py-0.2 bg-slate-950/90 rounded-br border-b border-r border-emerald-400/50 text-[6.5px] font-mono font-bold text-emerald-300 leading-none flex items-center space-x-0.5">
+                <span className="w-1 h-1 rounded-full bg-emerald-400 animate-ping inline-block" />
+                <span>γ • [{bucketGamma.row}:{bucketGamma.col}]</span>
+              </div>
+
+              <div key={`laser-gamma-${bucketGamma.touchdownId}`} className="bucket-laser-blade bucket-laser-blade-gamma" />
+
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <div className="w-2 h-2 rounded-full border border-emerald-400/50 flex items-center justify-center animate-spin" style={{ animationDuration: '4s' }}>
+                  <div className="w-0.5 h-0.5 rounded-full bg-emerald-300 shadow-[0_0_4px_#34d399]" />
+                </div>
+              </div>
+
+              <div className="w-full h-full bucket-sampling-glow bucket-sampling-glow-gamma" />
+            </div>
+
+            {/* Kova δ (Delta - Solar Amber / Fotonik Pişirici) */}
+            <div
+              className="roving-bucket roving-bucket-delta"
+              style={{
+                width: '10%',
+                height: `${100 / ROWS}%`,
+                transform: `translate3d(${bucketDelta.col * 100}%, ${bucketDelta.row * 100}%, 0)`,
+              }}
+            >
+              <div className="bucket-motion-ghost bucket-motion-ghost-delta" />
+              <span className="bucket-bracket bucket-bracket-tl text-amber-400" />
+              <span className="bucket-bracket-tr text-amber-400" />
+              <span className="bucket-bracket-bl text-amber-400" />
+              <span className="bucket-bracket-br text-amber-400" />
+
+              <div className="absolute top-0 left-0 px-0.5 py-0.2 bg-slate-950/90 rounded-br border-b border-r border-amber-400/50 text-[6.5px] font-mono font-bold text-amber-300 leading-none flex items-center space-x-0.5">
+                <span className="w-1 h-1 rounded-full bg-amber-400 animate-ping inline-block" />
+                <span>δ • [{bucketDelta.row}:{bucketDelta.col}]</span>
+              </div>
+
+              <div key={`laser-delta-${bucketDelta.touchdownId}`} className="bucket-laser-blade bucket-laser-blade-delta" />
+
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <div className="w-2 h-2 rounded-full border border-amber-400/50 flex items-center justify-center animate-spin" style={{ animationDuration: '4s' }}>
+                  <div className="w-0.5 h-0.5 rounded-full bg-amber-300 shadow-[0_0_4px_#fbbf24]" />
+                </div>
+              </div>
+
+              <div className="w-full h-full bucket-sampling-glow bucket-sampling-glow-delta" />
+            </div>
+          </>
         )}
 
-        {/* 4. Sensör 2: β • Matrix Aperture (Kalem Tablosu & Matris Analizcisi) */}
-        {!isFinishing && (
-          <div
-            className="roving-bucket roving-bucket-beta"
-            style={{
-              left: `${(bucket2.col / 6) * 100}%`,
-              top: `${(bucket2.row / 8) * 100}%`,
-              width: `${(1 / 6) * 100}%`,
-              height: `${(1 / 8) * 100}%`,
-            }}
-          >
-            {/* Hareket İzi / Hayalet Kuyruk (Motion Ghosting) */}
-            <div className="bucket-motion-ghost bucket-motion-ghost-beta" />
-
-            {/* L-Köşe Hassasiyet Braketleri */}
-            <span className="bucket-bracket bucket-bracket-tl border-indigo-400" />
-            <span className="bucket-bracket-tr border-indigo-400" />
-            <span className="bucket-bracket-bl border-indigo-400" />
-            <span className="bucket-bracket-br border-indigo-400" />
-
-            {/* Sensör Kimlik Rozeti & Canlı Koordinat Damgası */}
-            <div className="absolute top-0.5 left-0.5 px-1 py-0.2 bg-slate-950/90 rounded-br border-b border-r border-indigo-400/50 text-[7.5px] font-mono font-bold text-indigo-300 leading-none tracking-tight flex items-center space-x-1 shadow-sm">
-              <span className="w-1 h-1 rounded-full bg-indigo-400 animate-ping inline-block" />
-              <span>β • [{bucket2.row}:{bucket2.col}]</span>
-            </div>
-
-            {/* Dikey Yüksek Hızlı Lazer Tarama Bıçağı (140ms Sweep) */}
-            <div 
-              key={`laser-2-${bucket2.touchdownId}`} 
-              className="bucket-laser-blade bucket-laser-blade-beta" 
-            />
-
-            {/* Dönen Optik Hedefleme Artısı (Center Reticle) */}
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <div className="w-2.5 h-2.5 rounded-full border border-indigo-400/50 flex items-center justify-center animate-spin" style={{ animationDuration: '4s' }}>
-                <div className="w-0.5 h-0.5 rounded-full bg-indigo-300 shadow-[0_0_4px_#818cf8]" />
-              </div>
-            </div>
-
-            {/* Kova Odak Parıltısı */}
-            <div className="w-full h-full bucket-sampling-glow bucket-sampling-glow-beta" />
-          </div>
-        )}
-
-        {/* 5. Global Anamorfik Diyafram Flaşı & Şok Dalgası (Büyük Sinematik Kapanış) */}
+        {/* 4. Global Anamorfik Diyafram Flaşı & Şok Dalgası (Büyük Sinematik Kapanış) */}
         {isFinishing && (
           <div className="global-aperture-flash pointer-events-none">
             <div className="anamorphic-horizontal-flare" />
