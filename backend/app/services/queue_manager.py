@@ -2,6 +2,7 @@ import asyncio
 import logging
 from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor
 
 from ..core.config import settings
 from ..models.irsaliye import DocumentItem, ProcessingStatus
@@ -17,6 +18,7 @@ class QueueManager:
     """
     DocuLog İş İstasyonu Küresel Eşzamanlılık ve Kuyruk Yönetim Motoru.
     - Tüm tekil, toplu ve mobil yapay zeka işlemlerini 2 eşzamanlı worker ile sınırlar (503 burst koruması).
+    - Ağır OCR ve OpenCV deskew işlemlerini izole bir ThreadPoolExecutor'da çalıştırarak event loop açlığını önler.
     - 429 Rate Limit durumunda otomatik üstel geri çekilme (exponential backoff: 1.5s, 3.0s) uygular.
     - Canlı izlenebilir kuyruk metrikleri sunar.
     """
@@ -30,6 +32,11 @@ class QueueManager:
         self.total_failed: int = 0
         self.total_retried: int = 0
         self._lock = asyncio.Lock()
+        # Ağır görüntü işleme ve API çağrıları için ayrılmış thread havuzu
+        self._executor = ThreadPoolExecutor(
+            max_workers=max(4, max_concurrent * 2),
+            thread_name_prefix="doculog_ai_worker"
+        )
 
     def get_status(self) -> Dict[str, Any]:
         """Anlık kuyruk ve eşzamanlılık metriklerini döndürür"""
@@ -83,7 +90,7 @@ class QueueManager:
                     # Senkron AI çıkarma işlemini executor'da 75 saniye zaman aşımı garantisiyle çalıştır
                     try:
                         await asyncio.wait_for(
-                            loop.run_in_executor(None, extractor_func, doc_id),
+                            loop.run_in_executor(self._executor, extractor_func, doc_id),
                             timeout=75.0
                         )
                     except asyncio.TimeoutError:

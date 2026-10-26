@@ -1,8 +1,11 @@
-from typing import List, Optional, Set
+from typing import List, Optional, Set, Dict
 from pathlib import Path
 import os
 import time
 import logging
+from collections import OrderedDict
+from threading import Lock
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from ..models.db import SessionLocal, DocumentModel, init_db
 from ..models.irsaliye import DocumentItem, ProcessingStatus, IrsaliyeData
@@ -15,9 +18,39 @@ logger = logging.getLogger(__name__)
 init_db()
 
 class DocumentRepository:
+    _cache_lock = Lock()
+    _doc_cache: OrderedDict[str, DocumentItem] = OrderedDict()
+    CACHE_CAPACITY: int = 1000
+
     @staticmethod
     def get_db() -> Session:
         return SessionLocal()
+
+    @classmethod
+    def _cache_get(cls, doc_id: str) -> Optional[DocumentItem]:
+        with cls._cache_lock:
+            if doc_id in cls._doc_cache:
+                cls._doc_cache.move_to_end(doc_id)
+                return cls._doc_cache[doc_id].model_copy(deep=True)
+        return None
+
+    @classmethod
+    def _cache_put(cls, item: DocumentItem):
+        with cls._cache_lock:
+            cls._doc_cache[item.id] = item.model_copy(deep=True)
+            cls._doc_cache.move_to_end(item.id)
+            if len(cls._doc_cache) > cls.CACHE_CAPACITY:
+                cls._doc_cache.popitem(last=False)
+
+    @classmethod
+    def _cache_remove(cls, doc_id: str):
+        with cls._cache_lock:
+            cls._doc_cache.pop(doc_id, None)
+
+    @classmethod
+    def _cache_clear(cls):
+        with cls._cache_lock:
+            cls._doc_cache.clear()
 
     @classmethod
     def get_all(cls) -> List[DocumentItem]:
@@ -32,12 +65,20 @@ class DocumentRepository:
 
     @classmethod
     def get_by_id(cls, doc_id: str) -> Optional[DocumentItem]:
+        # 1. Hızlı In-Memory LRU Cache Denetimi
+        cached = cls._cache_get(doc_id)
+        if cached:
+            return cached
+
+        # 2. SQLite Cache Miss -> Veritabanından Oku ve Önbelleğe Al
         with cls.get_db() as db:
             try:
                 m = db.query(DocumentModel).filter(DocumentModel.id == doc_id).first()
                 if not m:
                     return None
-                return cls._model_to_item(m)
+                item = cls._model_to_item(m)
+                cls._cache_put(item)
+                return item
             except Exception as e:
                 db.rollback()
                 logger.error(f"Belge ({doc_id}) aranırken veritabanı hatası: {e}")
@@ -86,6 +127,8 @@ class DocumentRepository:
                     )
                     db.add(m)
                 db.commit()
+                # Önbelleği güncelle
+                cls._cache_put(item)
                 return item
             except Exception as e:
                 db.rollback()
@@ -144,6 +187,7 @@ class DocumentRepository:
         Belgeyi veritabanından siler. Hata durumunda rollback yapılır.
         Transaction başarıyla commit edildikten sonra fiziksel dosyalar temizlenir.
         """
+        cls._cache_remove(doc_id)
         item: Optional[DocumentItem] = None
         with cls.get_db() as db:
             try:
@@ -169,6 +213,7 @@ class DocumentRepository:
         Tüm belgeleri temizler. Hata durumunda rollback yapılır.
         Yalnızca transaction commit sonrasında fiziksel dosyalar diskten kaldırılır.
         """
+        cls._cache_clear()
         docs_to_delete = cls.get_all() if delete_files else []
         with cls.get_db() as db:
             try:
@@ -224,15 +269,40 @@ class DocumentRepository:
         return deleted
 
     @classmethod
+    def get_status_counts(cls) -> Dict[str, int]:
+        """
+        Tüm evrakları bellek ve JSON yükü olmadan doğrudan SQLite indeksli
+        GROUP BY sorgusu ile mikrosaniyeler içinde sayar.
+        """
+        with cls.get_db() as db:
+            try:
+                rows = db.query(DocumentModel.durum, func.count(DocumentModel.id)).group_by(DocumentModel.durum).all()
+                return {str(r[0]): int(r[1]) for r in rows}
+            except Exception as e:
+                logger.error(f"Durum sayıları hesaplanırken SQL hatası: {e}")
+                return {}
+
+    @classmethod
     def get_summary(cls) -> BatchSummary:
-        docs = cls.get_all()
+        """
+        Yüksek verimli durum özeti: Tüm dokümanları belleğe yüklemek yerine
+        indeksli SQL aggregate ile tek sorguda üretir.
+        """
+        counts = cls.get_status_counts()
+        kuyrukta = counts.get(ProcessingStatus.KUYRUKTA.value, 0) + counts.get("kuyrukta", 0)
+        islenen = counts.get(ProcessingStatus.ISLENIYOR.value, 0) + counts.get("isleniyor", 0)
+        tamamlanan = counts.get(ProcessingStatus.TAMAMLANDI.value, 0) + counts.get("tamamlandi", 0)
+        hatali = counts.get(ProcessingStatus.HATA.value, 0) + counts.get("hata", 0)
+        onaylanan = counts.get(ProcessingStatus.ONAYLANDI.value, 0) + counts.get("onaylandi", 0)
+        toplam = sum(counts.values())
+
         return BatchSummary(
-            toplam_belge=len(docs),
-            kuyrukta=sum(1 for d in docs if d.durum == ProcessingStatus.KUYRUKTA),
-            islenen=sum(1 for d in docs if d.durum == ProcessingStatus.ISLENIYOR),
-            tamamlanan=sum(1 for d in docs if d.durum == ProcessingStatus.TAMAMLANDI),
-            hatali=sum(1 for d in docs if d.durum == ProcessingStatus.HATA),
-            onaylanan=sum(1 for d in docs if d.durum == ProcessingStatus.ONAYLANDI),
+            toplam_belge=toplam,
+            kuyrukta=kuyrukta,
+            islenen=islenen,
+            tamamlanan=tamamlanan,
+            hatali=hatali,
+            onaylanan=onaylanan,
         )
 
     @staticmethod

@@ -1,12 +1,14 @@
 import re
 import difflib
 import logging
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict, Optional, Tuple, Pattern
 from threading import Lock
+from collections import OrderedDict
 from sqlalchemy.orm import Session
 
 from ..models.irsaliye import LineItem
 from ..models.db import SessionLocal, ProductAliasModel
+from .validation import vkn_memory_cache
 
 logger = logging.getLogger(__name__)
 
@@ -98,13 +100,35 @@ DEFAULT_BUILTIN_ALIASES: Dict[str, str] = {
 class ProductNormalizer:
     """
     Nokta vuruşlu (dot-matrix) ve silik şeritli irsaliyelerdeki optik okuma deformasyonlarını
-    düzelten, operatör düzeltmelerinden dinamik öğrenen kurumsal ürün normalizasyon servisi.
+    düzelten, in-memory LRU cache ve önceden derlenmiş regex kuralları ile mikro saniyelerde
+    yanıt veren, operatör düzeltmelerinden dinamik öğrenen kurumsal ürün normalizasyon servisi.
     """
 
     def __init__(self):
         self._lock = Lock()
         self._dynamic_aliases: Dict[str, str] = {}
+        self._hot_aliases: Dict[str, str] = {}
+        self._compiled_rules: List[Tuple[Pattern, str]] = []
+        self._normalize_lru_cache: OrderedDict[str, str] = OrderedDict()
+        self.CACHE_CAPACITY: int = 10000
         self._initialized = False
+
+    def _rebuild_compiled_rules_locked(self):
+        """Önceden derlenmiş regex kurallarını ve hot alias haritasını thread-safe olarak yeniler."""
+        combined: Dict[str, str] = {}
+        combined.update(DEFAULT_BUILTIN_ALIASES)
+        combined.update(self._dynamic_aliases)
+        self._hot_aliases = dict(combined)
+
+        sorted_patterns = sorted(combined.keys(), key=lambda k: len(k), reverse=True)
+        rules: List[Tuple[Pattern, str]] = []
+        for pat in sorted_patterns:
+            esc = re.escape(pat)
+            regex = re.compile(rf'(?<!\w){esc}(?!\w)', re.IGNORECASE)
+            rules.append((regex, combined[pat]))
+
+        self._compiled_rules = rules
+        self._normalize_lru_cache.clear()
 
     def _ensure_loaded(self):
         if self._initialized:
@@ -125,11 +149,13 @@ class ProductNormalizer:
                     db.close()
             except Exception as e:
                 logger.warning(f"ProductNormalizer: Veritabanından alias yüklenirken istisna: {e}")
+            self._rebuild_compiled_rules_locked()
             self._initialized = True
 
     def normalize_text(self, text: str) -> str:
         """
         Verilen mal/hizmet açıklamasını hem yerleşik kurallar hem de öğrenilmiş alias'lar ile temizler.
+        In-memory LRU önbellek ve önceden derlenmiş kural motoru kullanır.
         """
         if not text:
             return ""
@@ -142,36 +168,27 @@ class ProductNormalizer:
         cleaned = re.sub(r'_{2,}', ' ', cleaned)
         cleaned = re.sub(r'\s{2,}', ' ', cleaned).strip()
 
+        # 0. In-Memory LRU Cache Denetimi (Hit -> < 0.001 ms)
+        with self._lock:
+            if cleaned in self._normalize_lru_cache:
+                self._normalize_lru_cache.move_to_end(cleaned)
+                return self._normalize_lru_cache[cleaned]
+
         lower_full = to_tr_lower(cleaned)
 
-        # 1. Tam Eşleşme Kontrolü (Dynamic DB öncelikli, sonra Builtin)
-        if lower_full in self._dynamic_aliases:
-            return self._dynamic_aliases[lower_full]
-        if lower_full in DEFAULT_BUILTIN_ALIASES:
-            return DEFAULT_BUILTIN_ALIASES[lower_full]
-
-        # 2. Token / Kelime Öbeği Bazlı Değiştirme
-        # Çok kelimeli alias'ları uzunluklarına göre sıralayarak uygula
-        combined_aliases: Dict[str, str] = {}
-        combined_aliases.update(DEFAULT_BUILTIN_ALIASES)
+        # 1. Hızlı Tam Eşleşme Kontrolü (O(1) Hot Cache)
         with self._lock:
-            combined_aliases.update(self._dynamic_aliases)
+            hot_match = self._hot_aliases.get(lower_full)
+            if hot_match:
+                self._cache_put_locked(cleaned, hot_match)
+                return hot_match
+            rules_copy = list(self._compiled_rules)
+            combined_aliases = dict(self._hot_aliases)
 
-        # Uzun olan kalıplar önce uygulansın (örn: 'petibor bisk' -> 'petibor'den önce)
-        sorted_patterns = sorted(combined_aliases.keys(), key=lambda k: len(k), reverse=True)
-
+        # 2. Önceden Derlenmiş Regex Pipeline (Dinamik Regex Derleme Yükünü Kaldırır)
         result_text = cleaned
-        for pattern in sorted_patterns:
-            # Türkçe harf sınırlarına duyarlı regex
-            # (?i) bayrağı ve Türkçe karakterler için esnek sınır
-            escaped_pattern = re.escape(pattern)
-            # Kelime başlangıcı ve bitişi kontrolü
-            regex = re.compile(rf'(?<!\w){escaped_pattern}(?!\w)', re.IGNORECASE)
-            
-            def _replacer(match):
-                return combined_aliases[pattern]
-
-            new_text, count = regex.subn(_replacer, result_text)
+        for regex, target_val in rules_copy:
+            new_text, count = regex.subn(target_val, result_text)
             if count > 0:
                 result_text = new_text
 
@@ -183,7 +200,6 @@ class ProductNormalizer:
             tok_clean = re.sub(r'^[^\w]+|[^\w]+$', '', tok)
             tok_lower = to_tr_lower(tok_clean)
             if len(tok_lower) >= 4 and tok_lower not in combined_aliases:
-                # Bilinen tekil kelimelerle benzerlik kontrolü
                 best_match = None
                 best_ratio = 0.0
                 for candidate_key, correct_val in combined_aliases.items():
@@ -203,7 +219,18 @@ class ProductNormalizer:
 
         # Fazla boşlukları temizle
         result_text = re.sub(r'\s+', ' ', result_text).strip()
+
+        # Sonucu LRU Cache'e kaydet
+        with self._lock:
+            self._cache_put_locked(cleaned, result_text)
+
         return result_text
+
+    def _cache_put_locked(self, key: str, value: str):
+        self._normalize_lru_cache[key] = value
+        self._normalize_lru_cache.move_to_end(key)
+        if len(self._normalize_lru_cache) > self.CACHE_CAPACITY:
+            self._normalize_lru_cache.popitem(last=False)
 
     def normalize_items(self, items: Optional[List[LineItem]]) -> List[LineItem]:
         """
@@ -237,6 +264,7 @@ class ProductNormalizer:
 
         with self._lock:
             self._dynamic_aliases[clean_raw] = clean_corrected
+            self._rebuild_compiled_rules_locked()
 
         try:
             db: Session = SessionLocal()
@@ -261,6 +289,15 @@ class ProductNormalizer:
                 db.close()
         except Exception as e:
             logger.error(f"ProductNormalizer: Kural kaydedilirken DB hatası: {e}")
+
+    # VKN Memory Cache Kolay Erişim Yöntemleri
+    @staticmethod
+    def record_vkn_title(vkn: str, unvan: str):
+        vkn_memory_cache.record_vkn_unvan(vkn, unvan)
+
+    @staticmethod
+    def get_vkn_title(vkn: str) -> Optional[str]:
+        return vkn_memory_cache.get_unvan(vkn)
 
     def get_all_aliases(self) -> List[Dict]:
         """Tüm kayıtlı ve yerleşik eşleştirmeleri listeler."""

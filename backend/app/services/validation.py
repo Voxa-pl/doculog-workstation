@@ -5,13 +5,56 @@ TCKN 11-Digit Algorithmic Verification, and ERP PO 3-Way Reconciliation.
 """
 
 from typing import Dict, Any, Optional, List
+from functools import lru_cache
+from threading import Lock
+from collections import OrderedDict
 import re
 
+class VKNMemoryCache:
+    """
+    VKN / TCKN doğrulamaları ve bilinen kurumsal cari ünvanları için
+    yüksek performanslı iş istasyonu bellek önbelleği.
+    """
+    def __init__(self, capacity: int = 4096):
+        self._lock = Lock()
+        self._vkn_to_unvan: OrderedDict[str, str] = OrderedDict()
+        self.capacity = capacity
 
+    def record_vkn_unvan(self, vkn: str, unvan: str):
+        if not vkn or not unvan:
+            return
+        clean_vkn = re.sub(r'\D', '', str(vkn))
+        clean_unvan = unvan.strip()
+        if not clean_vkn or not clean_unvan:
+            return
+        with self._lock:
+            self._vkn_to_unvan[clean_vkn] = clean_unvan
+            self._vkn_to_unvan.move_to_end(clean_vkn)
+            if len(self._vkn_to_unvan) > self.capacity:
+                self._vkn_to_unvan.popitem(last=False)
+
+    def get_unvan(self, vkn: str) -> Optional[str]:
+        if not vkn:
+            return None
+        clean_vkn = re.sub(r'\D', '', str(vkn))
+        with self._lock:
+            if clean_vkn in self._vkn_to_unvan:
+                self._vkn_to_unvan.move_to_end(clean_vkn)
+                return self._vkn_to_unvan[clean_vkn]
+        return None
+
+    def clear(self):
+        with self._lock:
+            self._vkn_to_unvan.clear()
+
+vkn_memory_cache = VKNMemoryCache()
+
+
+@lru_cache(maxsize=8192)
 def validate_vkn(vkn: Optional[str]) -> bool:
     """
     T.C. Gelir İdaresi Başkanlığı resmi Vergi Kimlik Numarası (VKN) Modulo-10 doğrulama algoritması.
-    10 haneli olmalıdır.
+    10 haneli olmalıdır. In-memory LRU cache ile mikrosaniyede doğrulanır.
     """
     if not vkn:
         return False
@@ -38,9 +81,11 @@ def validate_vkn(vkn: Optional[str]) -> bool:
     return check_digit == digits[9]
 
 
+@lru_cache(maxsize=8192)
 def validate_tckn(tckn: Optional[str]) -> bool:
     """
     T.C. Kimlik Numarası 11 haneli matematiksel doğrulama algoritması.
+    In-memory LRU cache ile mikrosaniyede doğrulanır.
     """
     if not tckn:
         return False

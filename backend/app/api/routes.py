@@ -417,14 +417,23 @@ BATCH_WORKER_LOCK = asyncio.Lock()
 IS_BATCH_PROCESSING = False
 
 async def _run_batch_worker(doc_ids: List[str]):
-    """Toplu evrak işlemede kaskad çöküşe karşı dayanıklı, izole ve sıralı worker."""
+    """Toplu evrak işlemede kontrollü concurrency (max_concurrent workers) ile yüksek verimli worker havuzu."""
     global IS_BATCH_PROCESSING
-    try:
-        for doc_id in doc_ids:
+    task_queue: asyncio.Queue = asyncio.Queue()
+    for d_id in doc_ids:
+        await task_queue.put(d_id)
+
+    async def worker():
+        while not task_queue.empty():
+            try:
+                doc_id = task_queue.get_nowait()
+            except asyncio.QueueEmpty:
+                break
             try:
                 doc = doc_repo.get_by_id(doc_id)
                 if not doc:
-                    continue  # Silinmiş evrak, işlemi güvenle atla
+                    task_queue.task_done()
+                    continue
                 if doc.durum != ProcessingStatus.ISLENIYOR:
                     doc.durum = ProcessingStatus.ISLENIYOR
                     doc_repo.save(doc, create_if_missing=False)
@@ -435,7 +444,7 @@ async def _run_batch_worker(doc_ids: List[str]):
                         "durum": ProcessingStatus.ISLENIYOR.value
                     })
                 await queue_manager.process_document_safe(doc_id, _run_ai_extraction)
-                await asyncio.sleep(0.8)  # Kota nefes alma payı
+                await asyncio.sleep(0.4)
             except Exception as item_err:
                 print(f"[BatchWorker HATA] Belge {doc_id} işlenirken hata (diğer evraklar devam ediyor): {item_err}")
                 err_doc = doc_repo.get_by_id(doc_id)
@@ -443,6 +452,12 @@ async def _run_batch_worker(doc_ids: List[str]):
                     err_doc.durum = ProcessingStatus.HATA
                     err_doc.hata_mesaji = f"İşlem hatası: {str(item_err)}"
                     doc_repo.save(err_doc, create_if_missing=False)
+            finally:
+                task_queue.task_done()
+
+    try:
+        workers = [asyncio.create_task(worker()) for _ in range(queue_manager.max_concurrent)]
+        await asyncio.gather(*workers)
     finally:
         async with BATCH_WORKER_LOCK:
             IS_BATCH_PROCESSING = False
@@ -453,17 +468,13 @@ async def _run_batch_worker(doc_ids: List[str]):
 
 @router.get("/system/queue-status")
 async def get_queue_status():
-    docs = doc_repo.get_all()
-    processing = [d for d in docs if d.durum == ProcessingStatus.ISLENIYOR]
-    queued = [d for d in docs if d.durum == ProcessingStatus.KUYRUKTA]
-    completed = [d for d in docs if d.durum == ProcessingStatus.TAMAMLANDI]
-    error = [d for d in docs if d.durum == ProcessingStatus.HATA]
+    counts = doc_repo.get_status_counts()
     q_status = queue_manager.get_status()
     return {
-        "isleniyor_adet": len(processing),
-        "kuyrukta_adet": len(queued),
-        "tamamlandi_adet": len(completed),
-        "hata_adet": len(error),
+        "isleniyor_adet": counts.get(ProcessingStatus.ISLENIYOR.value, 0) + counts.get("isleniyor", 0),
+        "kuyrukta_adet": counts.get(ProcessingStatus.KUYRUKTA.value, 0) + counts.get("kuyrukta", 0),
+        "tamamlandi_adet": counts.get(ProcessingStatus.TAMAMLANDI.value, 0) + counts.get("tamamlandi", 0),
+        "hata_adet": counts.get(ProcessingStatus.HATA.value, 0) + counts.get("hata", 0),
         "concurrency_limit": queue_manager.max_concurrent,
         "active_workers": q_status["active_workers"],
         "queued_tasks": q_status["queued_tasks"],

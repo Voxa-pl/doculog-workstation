@@ -169,19 +169,21 @@ class GeminiExtractor:
             return fallback
 
         try:
-            # Bellek sızıntısı ve gecikmeyi önleyen akıllı optik boyutlandırma (2560px max)
+            # Bellek sızıntısı ve gecikmeyi önleyen yüksek verimli WebP/JPEG optik boyutlandırma
             opt_main_path = image_processor.optimize_image_for_gemini(image_path)
+            eff_mime_type = image_processor.get_mime_type_for_file(opt_main_path)
             parts = []
             with open(opt_main_path, "rb") as f:
-                parts.append(types.Part.from_bytes(data=f.read(), mime_type=mime_type))
+                parts.append(types.Part.from_bytes(data=f.read(), mime_type=eff_mime_type))
 
             # Çoklu sayfa desteği
             if additional_pages:
                 for add_page in additional_pages:
                     if add_page and add_page.exists() and add_page != image_path:
                         opt_add_page = image_processor.optimize_image_for_gemini(add_page)
+                        eff_page_mime = image_processor.get_mime_type_for_file(opt_add_page)
                         with open(opt_add_page, "rb") as f_add:
-                            parts.append(types.Part.from_bytes(data=f_add.read(), mime_type="image/jpeg"))
+                            parts.append(types.Part.from_bytes(data=f_add.read(), mime_type=eff_page_mime))
 
             schema = IrsaliyeData.model_json_schema()
             prompt_text = (

@@ -39,26 +39,46 @@ def test_self_learning_alias_memory():
     raw_bad = "deforme_test_urunu_99"
     corrected = "Özel Lojistik Çemberi 16mm"
 
-    # İlk başta bilinmiyor
-    res_before = product_normalizer.normalize_text(raw_bad)
-    assert res_before == raw_bad
-
-    # Kullanıcı düzeltmesi kaydet
-    product_normalizer.record_user_correction(raw_bad, corrected)
-
-    # Artık hemen tanımalı
-    res_after = product_normalizer.normalize_text(f"Depo {raw_bad} Sevk")
-    assert corrected in res_after
-
-    # Veritabanında kayıtlı olduğunu doğrula
+    # Ön temizlik (önceki test çalıştırmalarından kalan verileri izole et)
     db = SessionLocal()
     try:
-        rec = db.query(ProductAliasModel).filter(ProductAliasModel.raw_pattern == raw_bad).first()
-        assert rec is not None
-        assert rec.normalized_name == corrected
-        assert rec.usage_count >= 1
+        db.query(ProductAliasModel).filter(ProductAliasModel.raw_pattern == raw_bad).delete()
+        db.commit()
     finally:
         db.close()
+    product_normalizer._dynamic_aliases.pop(raw_bad, None)
+    product_normalizer._rebuild_compiled_rules_locked()
+
+    try:
+        # İlk başta bilinmiyor
+        res_before = product_normalizer.normalize_text(raw_bad)
+        assert res_before == raw_bad
+
+        # Kullanıcı düzeltmesi kaydet
+        product_normalizer.record_user_correction(raw_bad, corrected)
+
+        # Artık hemen tanımalı
+        res_after = product_normalizer.normalize_text(f"Depo {raw_bad} Sevk")
+        assert corrected in res_after
+
+        # Veritabanında kayıtlı olduğunu doğrula
+        db = SessionLocal()
+        try:
+            rec = db.query(ProductAliasModel).filter(ProductAliasModel.raw_pattern == raw_bad).first()
+            assert rec is not None
+            assert rec.normalized_name == corrected
+            assert rec.usage_count >= 1
+        finally:
+            db.close()
+    finally:
+        db = SessionLocal()
+        try:
+            db.query(ProductAliasModel).filter(ProductAliasModel.raw_pattern == raw_bad).delete()
+            db.commit()
+        finally:
+            db.close()
+        product_normalizer._dynamic_aliases.pop(raw_bad, None)
+        product_normalizer._rebuild_compiled_rules_locked()
 
 def test_catalog_api_endpoints():
     # 1. Alias listeleme

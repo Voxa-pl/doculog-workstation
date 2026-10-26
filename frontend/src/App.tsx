@@ -18,8 +18,14 @@ import { BatchQueue } from './components/queue/BatchQueue';
 import { CollapsibleDockRail } from './components/queue/CollapsibleDockRail';
 import { DocumentViewer } from './components/viewer/DocumentViewer';
 import { DocumentEditor } from './components/editor/DocumentEditor';
-import { ExecutiveDashboard } from './components/dashboard/ExecutiveDashboard';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
+
+// Code-Splitting: Yönetici Analitik Kokpiti (Executive Dashboard) İsteğe Bağlı Lazy-Load
+const ExecutiveDashboard = React.lazy(() =>
+  import('./components/dashboard/ExecutiveDashboard').then((m) => ({
+    default: m.ExecutiveDashboard,
+  }))
+);
 import { 
   Inbox, 
   Eye, 
@@ -688,16 +694,24 @@ export const App: React.FC = () => {
         {/* Yönetici Kokpiti Görünümü */}
         {activeView === 'dashboard' && (
           <ErrorBoundary panelName="Yönetici Analitik Kokpiti">
-            <ExecutiveDashboard
-              documents={documents}
-              summary={summary}
-              theme={theme}
-              onSwitchToStation={() => setActiveView('station')}
-              onSelectDocument={(id) => {
-                requestSelectDoc(id);
-                setActiveView('station');
-              }}
-            />
+            <React.Suspense
+              fallback={
+                <div className="flex-1 h-full flex items-center justify-center p-8 bg-theme-app text-theme-muted text-xs font-mono">
+                  Yönetici Analitik Kokpiti Yükleniyor...
+                </div>
+              }
+            >
+              <ExecutiveDashboard
+                documents={documents}
+                summary={summary}
+                theme={theme}
+                onSwitchToStation={() => setActiveView('station')}
+                onSelectDocument={(id) => {
+                  requestSelectDoc(id);
+                  setActiveView('station');
+                }}
+              />
+            </React.Suspense>
           </ErrorBoundary>
         )}
       </div>
