@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { DocumentItem } from '../../types/irsaliye';
 import { ViewerToolbar } from './ViewerToolbar';
-import { NeuralPointCloud } from './NeuralPointCloud';
+import { ProgressiveTileRender } from './ProgressiveTileRender';
 import { documentApi } from '../../services/api';
 import { 
   FileQuestion, 
@@ -528,27 +528,16 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
                 style={{ pointerEvents: 'none' }}
                 draggable={false}
               />
+              {/* Progressive Tile Render (Kare Kare V-Ray / Cycles stili netleşme) */}
+              <ProgressiveTileRender isActive={isProcessing} />
             </div>
           </div>
         )}
-
-        {/* İzole Kadife Karartma & Kuantum Partikül Katmanı (Transform div'in DIŞINDA, sıfır reflow) */}
-        <NeuralPointCloud isActive={isProcessing} />
 
         {/* Minimal Linear Üst İlerleme Çizgisi (Discrete & Quiet) */}
         {isProcessing && (
           <div className="linear-progress-track">
             <div className="linear-progress-rail" />
-          </div>
-        )}
-
-        {/* Sade & Rafine Durum Rozeti (Apple/Linear Minimal) */}
-        {isProcessing && (
-          <div className="absolute bottom-5 left-1/2 -translate-x-1/2 bg-zinc-950/80 backdrop-blur-xl border border-white/10 rounded-full px-3.5 py-1.5 flex items-center space-x-2 shadow-tactile z-30 select-none pointer-events-none">
-            <span className="w-1.5 h-1.5 rounded-full bg-zinc-300 animate-pulse shrink-0" />
-            <span className="text-xs font-medium text-zinc-300 tracking-tight">
-              Ayrıştırılıyor...
-            </span>
           </div>
         )}
       </div>
