@@ -39,7 +39,7 @@ export const BatchQueue: React.FC<BatchQueueProps> = ({
   onMergeDocuments,
   isUploading,
 }) => {
-  type QueueFilterMode = 'all' | 'invoices' | 'non_invoices';
+  type QueueFilterMode = 'all' | 'invoices' | 'pending' | 'non_invoices';
   const [filterMode, setFilterMode] = useState<QueueFilterMode>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [isDragOver, setIsDragOver] = useState(false);
@@ -67,25 +67,41 @@ export const BatchQueue: React.FC<BatchQueueProps> = ({
     );
   };
 
-  const invoiceCount = safeDocs.filter((d) => d.durum !== 'kuyrukta' && !isDocNonInvoice(d)).length;
-  const nonInvoiceCount = safeDocs.filter((d) => isDocNonInvoice(d)).length;
+  const isDocPending = (doc: DocumentItem) => {
+    if (isDocNonInvoice(doc)) return false;
+    return doc.durum === 'kuyrukta' || doc.durum === 'isleniyor' || doc.durum === 'hata';
+  };
+
+  const isDocInvoice = (doc: DocumentItem) => {
+    if (isDocNonInvoice(doc)) return false;
+    return doc.durum === 'tamamlandi' || doc.durum === 'onaylandi';
+  };
+
+  const invoiceCount = safeDocs.filter(isDocInvoice).length;
+  const pendingCount = safeDocs.filter(isDocPending).length;
+  const nonInvoiceCount = safeDocs.filter(isDocNonInvoice).length;
+
+  // Türkçe Karakter Normalizasyonu (BUG-04 Çözümü)
+  const normalizeTr = (s?: string | null) => (s || '').toLocaleLowerCase('tr-TR').trim();
 
   const filteredDocs = safeDocs.filter((doc) => {
-    // 1. Kategori Filtresi
+    // 1. Kategori Filtresi (4 Kategori: Tümü, İrsaliye, Bekleyen, Uyumsuz)
     if (filterMode === 'invoices') {
-      if (isDocNonInvoice(doc)) return false;
+      if (!isDocInvoice(doc)) return false;
+    } else if (filterMode === 'pending') {
+      if (!isDocPending(doc)) return false;
     } else if (filterMode === 'non_invoices') {
       if (!isDocNonInvoice(doc)) return false;
     }
 
     // 2. Arama Filtresi
-    const term = searchTerm.toLowerCase();
+    const term = normalizeTr(searchTerm);
     if (!term) return true;
-    const fileNameMatch = (doc?.dosya_adi || '').toLowerCase().includes(term);
-    const irsaliyeNoMatch = (doc?.veri?.header?.irsaliye_no || '').toLowerCase().includes(term);
+    const fileNameMatch = normalizeTr(doc?.dosya_adi).includes(term);
+    const irsaliyeNoMatch = normalizeTr(doc?.veri?.header?.irsaliye_no).includes(term);
     const unvanMatch =
-      (doc?.veri?.header?.alici_unvan || '').toLowerCase().includes(term) ||
-      (doc?.veri?.header?.gonderici_unvan || '').toLowerCase().includes(term);
+      normalizeTr(doc?.veri?.header?.alici_unvan).includes(term) ||
+      normalizeTr(doc?.veri?.header?.gonderici_unvan).includes(term);
     return fileNameMatch || !!irsaliyeNoMatch || !!unvanMatch;
   });
 
@@ -121,10 +137,12 @@ export const BatchQueue: React.FC<BatchQueueProps> = ({
     );
   };
 
+  const validCheckedDocIds = checkedDocIds.filter((id) => safeDocs.some((d) => d.id === id));
+
   const handleMergeAction = () => {
-    if (checkedDocIds.length < 2 || !onMergeDocuments) return;
-    const targetId = checkedDocIds[0];
-    const sourceIds = checkedDocIds.slice(1);
+    if (validCheckedDocIds.length < 2 || !onMergeDocuments) return;
+    const targetId = validCheckedDocIds[0];
+    const sourceIds = validCheckedDocIds.slice(1);
     onMergeDocuments(targetId, sourceIds);
     setCheckedDocIds([]);
     setIsSelectionMode(false);
@@ -171,7 +189,7 @@ export const BatchQueue: React.FC<BatchQueueProps> = ({
             </span>
           ) : (
             <>
-              {safeDocs.length >= 2 && (
+              {(safeDocs.length >= 2 || isSelectionMode) && (
                 <button
                   type="button"
                   onClick={() => {
@@ -235,37 +253,52 @@ export const BatchQueue: React.FC<BatchQueueProps> = ({
             />
           </div>
 
-          <div className="flex items-center gap-1 p-0.5 bg-theme-card/60 border border-theme-subtle rounded-md text-[10px] font-medium">
+          <div className="grid grid-cols-4 gap-1 p-0.5 bg-theme-card/60 border border-theme-subtle rounded-md text-[10px] font-medium">
             <button
               type="button"
               onClick={() => setFilterMode('all')}
-              className={`flex-1 py-1 px-1 rounded text-center transition-all ${
+              className={`py-1 px-0.5 rounded text-center transition-all truncate ${
                 filterMode === 'all'
                   ? 'bg-theme-card text-theme-primary font-semibold shadow-xs border border-theme-subtle'
                   : 'text-theme-muted hover:text-theme-primary'
               }`}
+              title={`Tüm Evraklar (${safeDocs.length})`}
             >
               Tümü ({safeDocs.length})
             </button>
             <button
               type="button"
               onClick={() => setFilterMode('invoices')}
-              className={`flex-1 py-1 px-1 rounded text-center transition-all ${
+              className={`py-1 px-0.5 rounded text-center transition-all truncate ${
                 filterMode === 'invoices'
                   ? 'bg-blue-600/25 text-blue-300 font-semibold border border-blue-500/30'
                   : 'text-theme-muted hover:text-theme-primary'
               }`}
+              title={`Doğrulanmış Sevk İrsaliyeleri (${invoiceCount})`}
             >
               İrsaliye ({invoiceCount})
             </button>
             <button
               type="button"
+              onClick={() => setFilterMode('pending')}
+              className={`py-1 px-0.5 rounded text-center transition-all truncate ${
+                filterMode === 'pending'
+                  ? 'bg-amber-600/25 text-amber-300 font-semibold border border-amber-500/30'
+                  : 'text-theme-muted hover:text-theme-primary'
+              }`}
+              title={`Bekleyen ve Hata Alan Evraklar (${pendingCount})`}
+            >
+              Bekleyen ({pendingCount})
+            </button>
+            <button
+              type="button"
               onClick={() => setFilterMode('non_invoices')}
-              className={`flex-1 py-1 px-1 rounded text-center transition-all ${
+              className={`py-1 px-0.5 rounded text-center transition-all truncate ${
                 filterMode === 'non_invoices'
                   ? 'bg-rose-600/25 text-rose-300 font-semibold border border-rose-500/30'
                   : 'text-theme-muted hover:text-theme-primary'
               }`}
+              title={`Uyumsuz / İrsaliye Olmayanlar (${nonInvoiceCount})`}
             >
               Uyumsuz ({nonInvoiceCount})
             </button>

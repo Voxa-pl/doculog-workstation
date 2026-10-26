@@ -85,6 +85,9 @@ export const useLiveSync = ({
         reconnectAttemptsRef.current = 0;
         setIsConnected(true);
 
+        // Yeniden bağlanıldığında veritabanı durumunu hemen çekip senkronize et
+        onDocumentsUpdatedRef.current?.({ type: 'DOCUMENTS_UPDATED', action: 'reconnect_sync' });
+
         // Start ping heartbeat every 20s
         if (pingIntervalRef.current) {
           clearInterval(pingIntervalRef.current);
@@ -102,7 +105,11 @@ export const useLiveSync = ({
           if (event.data === 'pong') return;
           const data: LiveSyncPayload = JSON.parse(event.data);
 
-          if (data.type === 'DOCUMENTS_UPDATED' || data.type === 'NEW_DOCUMENT_IN_QUEUE') {
+          if (
+            data.type === 'DOCUMENTS_UPDATED' ||
+            data.type === 'NEW_DOCUMENT_IN_QUEUE' ||
+            data.type === 'QUEUE_STATUS_UPDATED'
+          ) {
             onDocumentsUpdatedRef.current?.(data);
           } else if (data.type === 'DOCUMENT_UPLOADED') {
             if (data.document && onDocumentUploadedRef.current) {

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   DocumentItem, 
   ProcessingStatus 
@@ -13,7 +13,8 @@ import {
   RotateCw,
   Layers,
   CheckSquare,
-  Square
+  Square,
+  FileText
 } from 'lucide-react';
 
 interface QueueItemProps {
@@ -37,6 +38,10 @@ export const QueueItem: React.FC<QueueItemProps> = ({
   isChecked = false,
   onToggleCheck,
 }) => {
+  const [thumbFailed, setThumbFailed] = useState(false);
+  const [fullFailed, setFullFailed] = useState(false);
+  const isPdf = doc.mime_type === 'application/pdf' || (doc.dosya_adi || '').toLowerCase().endsWith('.pdf');
+
   const isNonInvoice = Boolean(
     doc.veri && (
       (typeof doc.veri.guven_skoru === 'number' && Number.isFinite(doc.veri.guven_skoru) && doc.veri.guven_skoru === 0) ||
@@ -142,20 +147,25 @@ export const QueueItem: React.FC<QueueItemProps> = ({
 
         {/* Thumbnail */}
         <div className="w-9 h-11 rounded bg-theme-app border border-theme-subtle overflow-hidden shrink-0 relative flex items-center justify-center">
-          <img
-            src={thumbUrl}
-            alt={doc.dosya_adi}
-            className="w-full h-full object-cover"
-            loading="lazy"
-            onError={(e) => {
-              const target = e.target as HTMLImageElement;
-              if (target.src !== fullUrl) {
-                target.src = fullUrl;
-              } else {
-                target.style.display = 'none';
-              }
-            }}
-          />
+          {isPdf ? (
+            <FileText className="w-4 h-4 text-purple-400 shrink-0" />
+          ) : !fullFailed ? (
+            <img
+              src={thumbFailed ? fullUrl : thumbUrl}
+              alt={doc.dosya_adi}
+              className="w-full h-full object-cover"
+              loading="lazy"
+              onError={() => {
+                if (!thumbFailed) {
+                  setThumbFailed(true);
+                } else {
+                  setFullFailed(true);
+                }
+              }}
+            />
+          ) : (
+            <FileText className="w-4 h-4 text-theme-muted shrink-0" />
+          )}
           {pageCount > 1 && (
             <div className="absolute bottom-0 right-0 bg-purple-950/90 text-purple-300 text-[8px] px-0.5 rounded-tl font-bold leading-none py-0.5">
               {pageCount}S
@@ -174,7 +184,10 @@ export const QueueItem: React.FC<QueueItemProps> = ({
               <button
                 type="button"
                 onClick={onDelete}
-                className="opacity-0 group-hover:opacity-100 text-theme-muted hover:text-rose-400 p-0.5 rounded transition-all"
+                disabled={doc.durum === 'isleniyor'}
+                className={`text-theme-muted hover:text-rose-400 p-1 rounded transition-all min-w-[28px] min-h-[28px] flex items-center justify-center ${
+                  doc.durum === 'isleniyor' ? 'hidden' : 'opacity-70 sm:opacity-0 sm:group-hover:opacity-100'
+                }`}
                 title="Kuyruktan Sil"
               >
                 <Trash2 className="w-3.5 h-3.5" />

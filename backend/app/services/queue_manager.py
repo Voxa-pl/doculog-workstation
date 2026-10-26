@@ -67,11 +67,13 @@ class QueueManager:
             self.queued_tasks += 1
         await self.broadcast_status()
 
+        worker_active = False
         try:
             async with self.semaphore:
                 async with self._lock:
                     self.queued_tasks = max(0, self.queued_tasks - 1)
                     self.active_workers += 1
+                    worker_active = True
                 await self.broadcast_status()
 
                 loop = asyncio.get_event_loop()
@@ -90,26 +92,33 @@ class QueueManager:
                         if timed_out_doc:
                             timed_out_doc.durum = ProcessingStatus.HATA
                             timed_out_doc.hata_mesaji = "Zaman Aşımı: İşlem 75 saniye içinde tamamlanamadı."
-                            doc_repo.save(timed_out_doc)
+                            doc_repo.save(timed_out_doc, create_if_missing=False)
                     last_doc = doc_repo.get_by_id(doc_id)
 
-                    # 429 Rate Limit kontrolü ve exponential backoff
-                    if (
+                    # 429 Rate Limit ve 503/504 Service Overload kontrolü ve exponential backoff
+                    is_rate_or_overload = (
                         last_doc
                         and last_doc.durum == ProcessingStatus.HATA
                         and last_doc.hata_mesaji
-                        and ("429" in last_doc.hata_mesaji or "kota" in last_doc.hata_mesaji.lower())
-                        and attempt < max_retries
-                    ):
+                        and (
+                            "429" in last_doc.hata_mesaji
+                            or "kota" in last_doc.hata_mesaji.lower()
+                            or "503" in last_doc.hata_mesaji
+                            or "504" in last_doc.hata_mesaji
+                            or "overloaded" in last_doc.hata_mesaji.lower()
+                        )
+                    )
+
+                    if is_rate_or_overload and attempt < max_retries:
                         delay = delays[min(attempt, len(delays) - 1)]
                         async with self._lock:
                             self.total_retried += 1
                         logger.warning(
-                            f"[Burst Limiter] Belge {doc_id} 429 aldı. {delay}s üstel gecikmeyle tekrar deneniyor (Deneme {attempt + 1}/{max_retries})..."
+                            f"[Burst Limiter] Belge {doc_id} geçici API yükü/kota aldı. {delay}s üstel gecikmeyle tekrar deneniyor (Deneme {attempt + 1}/{max_retries})..."
                         )
                         last_doc.durum = ProcessingStatus.ISLENIYOR
-                        last_doc.hata_mesaji = f"Kota aşıldı, {delay}s sonra otomatik yeniden deneniyor..."
-                        doc_repo.save(last_doc)
+                        last_doc.hata_mesaji = f"Geçici sunucu yoğunluğu, {delay}s sonra otomatik yeniden deneniyor..."
+                        doc_repo.save(last_doc, create_if_missing=False)
                         await self.broadcast_status()
                         await asyncio.sleep(delay)
                         continue
@@ -117,23 +126,31 @@ class QueueManager:
                     break
 
                 async with self._lock:
-                    self.active_workers = max(0, self.active_workers - 1)
                     if last_doc and last_doc.durum == ProcessingStatus.TAMAMLANDI:
                         self.total_completed += 1
                     else:
                         self.total_failed += 1
-                await self.broadcast_status()
 
                 return last_doc
 
+        except asyncio.CancelledError:
+            logger.warning(f"[QueueManager İPTAL] Belge {doc_id} görevi istemci bağlantı iptali nedeniyle sonlandırıldı.")
+            canceled_doc = doc_repo.get_by_id(doc_id)
+            if canceled_doc and canceled_doc.durum == ProcessingStatus.ISLENIYOR:
+                canceled_doc.durum = ProcessingStatus.HATA
+                canceled_doc.hata_mesaji = "İstemci bağlantısı koptuğu için işlem durduruldu."
+                doc_repo.save(canceled_doc, create_if_missing=False)
+            raise
         except Exception as e:
             async with self._lock:
-                self.queued_tasks = max(0, self.queued_tasks - 1)
-                self.active_workers = max(0, self.active_workers - 1)
                 self.total_failed += 1
             logger.error(f"[QueueManager HATA] Belge {doc_id} işlenirken istisna: {e}")
-            await self.broadcast_status()
             raise
+        finally:
+            if worker_active:
+                async with self._lock:
+                    self.active_workers = max(0, self.active_workers - 1)
+            await self.broadcast_status()
 
 
 queue_manager = QueueManager(max_concurrent=2)

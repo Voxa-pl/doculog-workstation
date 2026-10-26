@@ -44,7 +44,7 @@ class DocumentRepository:
                 raise
 
     @classmethod
-    def save(cls, item: DocumentItem) -> DocumentItem:
+    def save(cls, item: DocumentItem, create_if_missing: bool = True) -> DocumentItem:
         with cls.get_db() as db:
             try:
                 m = db.query(DocumentModel).filter(DocumentModel.id == item.id).first()
@@ -65,6 +65,10 @@ class DocumentRepository:
                     m.sayfalar = item.sayfalar
                     m.guncellenme_ts = item.guncellenme_ts
                 else:
+                    if not create_if_missing:
+                        logger.warning(f"[DocumentRepo] Belge ({item.id}) silinmiş olduğu için yeniden oluşturulmadı (Tombstone Korunumu).")
+                        return item
+
                     m = DocumentModel(
                         id=item.id,
                         dosya_adi=item.dosya_adi,

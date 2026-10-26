@@ -273,6 +273,7 @@ export const App: React.FC = () => {
   const selectedDoc = documents.find((d) => d.id === selectedDocId) || null;
 
   const requestSelectDoc = useCallback((targetId: string) => {
+    setMobileTab('viewer');
     if (targetId === selectedDocId) return;
     if (isEditorDirtyRef.current) {
       setPendingDocId(targetId);
@@ -280,7 +281,6 @@ export const App: React.FC = () => {
       return;
     }
     setSelectedDocId(targetId);
-    setMobileTab('viewer');
   }, [selectedDocId]);
 
   const handleDiscardAndSwitch = () => {

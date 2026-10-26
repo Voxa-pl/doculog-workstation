@@ -359,8 +359,24 @@ def _run_ai_extraction(doc_id: str):
         doc.hata_mesaji = str(e)
         print(f"[Gemini GENEL HATA] Belge {doc_id}: {e}")
 
+    # Hayalet Evrak Koruması: İşlem sürerken kullanıcı evrakı silmişse diriltme!
+    current_doc = doc_repo.get_by_id(doc_id)
+    if not current_doc:
+        print(f"[Ghost Prevention] Belge {doc_id} işlem sürerken silinmiş, yeniden oluşturulmuyor.")
+        return
+
+    # Kayıp Güncelleme (Lost Update) Koruması: Kullanıcı bu sürede formu düzenlediyse başlık/notları koru
+    if current_doc.veri and doc.veri:
+        if current_doc.veri.header and (current_doc.veri.header.irsaliye_no or current_doc.veri.header.gonderici_unvan):
+            # Kullanıcının manuel girdiği alanları koru
+            doc.veri.header.irsaliye_no = current_doc.veri.header.irsaliye_no or doc.veri.header.irsaliye_no
+            doc.veri.header.gonderici_unvan = current_doc.veri.header.gonderici_unvan or doc.veri.header.gonderici_unvan
+            doc.veri.header.alici_unvan = current_doc.veri.header.alici_unvan or doc.veri.header.alici_unvan
+        if current_doc.veri.genel_notlar:
+            doc.veri.genel_notlar = current_doc.veri.genel_notlar
+
     try:
-        doc_repo.save(doc)
+        doc_repo.save(doc, create_if_missing=False)
     except Exception as save_err:
         print(f"[DocumentRepo HATA] Belge {doc_id} durumu kaydedilemedi: {save_err}")
 
@@ -394,21 +410,43 @@ async def process_document(doc_id: str):
     await queue_manager.process_document_safe(doc_id, _run_ai_extraction)
     return doc_repo.get_by_id(doc_id)
 
+BATCH_WORKER_LOCK = asyncio.Lock()
+IS_BATCH_PROCESSING = False
+
 async def _run_batch_worker(doc_ids: List[str]):
-    """Toplu evrak işlemede API kota patlamasını (503/504) önleyen lazy status mutasyonlu sıralı worker."""
-    for doc_id in doc_ids:
-        doc = doc_repo.get_by_id(doc_id)
-        if doc and doc.durum != ProcessingStatus.ISLENIYOR:
-            doc.durum = ProcessingStatus.ISLENIYOR
-            doc_repo.save(doc)
-            await ws_manager.broadcast_all({
-                "type": "DOCUMENTS_UPDATED",
-                "action": "process_started",
-                "document_id": doc_id,
-                "durum": ProcessingStatus.ISLENIYOR.value
-            })
-        await queue_manager.process_document_safe(doc_id, _run_ai_extraction)
-        await asyncio.sleep(0.8)  # Kota nefes alma payı
+    """Toplu evrak işlemede kaskad çöküşe karşı dayanıklı, izole ve sıralı worker."""
+    global IS_BATCH_PROCESSING
+    try:
+        for doc_id in doc_ids:
+            try:
+                doc = doc_repo.get_by_id(doc_id)
+                if not doc:
+                    continue  # Silinmiş evrak, işlemi güvenle atla
+                if doc.durum != ProcessingStatus.ISLENIYOR:
+                    doc.durum = ProcessingStatus.ISLENIYOR
+                    doc_repo.save(doc, create_if_missing=False)
+                    await ws_manager.broadcast_all({
+                        "type": "DOCUMENTS_UPDATED",
+                        "action": "process_started",
+                        "document_id": doc_id,
+                        "durum": ProcessingStatus.ISLENIYOR.value
+                    })
+                await queue_manager.process_document_safe(doc_id, _run_ai_extraction)
+                await asyncio.sleep(0.8)  # Kota nefes alma payı
+            except Exception as item_err:
+                print(f"[BatchWorker HATA] Belge {doc_id} işlenirken hata (diğer evraklar devam ediyor): {item_err}")
+                err_doc = doc_repo.get_by_id(doc_id)
+                if err_doc:
+                    err_doc.durum = ProcessingStatus.HATA
+                    err_doc.hata_mesaji = f"İşlem hatası: {str(item_err)}"
+                    doc_repo.save(err_doc, create_if_missing=False)
+    finally:
+        async with BATCH_WORKER_LOCK:
+            IS_BATCH_PROCESSING = False
+        await ws_manager.broadcast_all({
+            "type": "DOCUMENTS_UPDATED",
+            "action": "batch_process_finished"
+        })
 
 @router.get("/system/queue-status")
 async def get_queue_status():
@@ -433,18 +471,25 @@ async def get_queue_status():
 
 @router.post("/batch/process-all")
 async def process_all_documents(background_tasks: BackgroundTasks):
-    docs = doc_repo.get_all()
-    to_process = [d for d in docs if d.durum in (ProcessingStatus.KUYRUKTA, ProcessingStatus.HATA)]
-    
-    if to_process:
-        doc_ids = [d.id for d in to_process]
-        background_tasks.add_task(_run_batch_worker, doc_ids)
-        await ws_manager.broadcast_all({
-            "type": "DOCUMENTS_UPDATED",
-            "action": "batch_process_queued",
-            "count": len(to_process)
-        })
-    return {"mesaj": "Toplu işlem kontrollü kuyrukla başlatıldı", "islenen_adet": len(to_process)}
+    global IS_BATCH_PROCESSING
+    async with BATCH_WORKER_LOCK:
+        if IS_BATCH_PROCESSING:
+            return {"mesaj": "Toplu işlem zaten arka planda çalışıyor.", "islenen_adet": 0}
+
+        docs = doc_repo.get_all()
+        to_process = [d for d in docs if d.durum in (ProcessingStatus.KUYRUKTA, ProcessingStatus.HATA)]
+        
+        if to_process:
+            IS_BATCH_PROCESSING = True
+            doc_ids = [d.id for d in to_process]
+            background_tasks.add_task(_run_batch_worker, doc_ids)
+            await ws_manager.broadcast_all({
+                "type": "DOCUMENTS_UPDATED",
+                "action": "batch_process_queued",
+                "count": len(to_process)
+            })
+            return {"mesaj": "Toplu işlem kontrollü kuyrukla başlatıldı", "islenen_adet": len(to_process)}
+        return {"mesaj": "İşlenecek bekleyen evrak yok", "islenen_adet": 0}
 
 @router.post("/documents/{doc_id}/rotate", response_model=DocumentItem)
 async def rotate_document(doc_id: str, req: RotateRequest):
