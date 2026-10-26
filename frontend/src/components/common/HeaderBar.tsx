@@ -18,9 +18,12 @@ import {
   X,
   HardDriveDownload,
   Key,
-  Download
+  Download,
+  Sidebar,
+  Columns,
+  Maximize2
 } from 'lucide-react';
-import { BatchSummary, ApiKeyStatus, AppTheme, AppView } from '../../types/irsaliye';
+import { BatchSummary, ApiKeyStatus, AppTheme, AppView, WorkspaceLayoutMode } from '../../types/irsaliye';
 import { documentApi, systemApi } from '../../services/api';
 
 interface HeaderBarProps {
@@ -36,6 +39,8 @@ interface HeaderBarProps {
   onViewChange?: (view: AppView) => void;
   theme?: AppTheme;
   onThemeChange?: (theme: AppTheme) => void;
+  layoutMode?: WorkspaceLayoutMode;
+  onLayoutModeChange?: (mode: WorkspaceLayoutMode) => void;
 }
 
 export const HeaderBar: React.FC<HeaderBarProps> = ({
@@ -50,6 +55,8 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
   onViewChange,
   theme = 'koyu-kurumsal',
   onThemeChange,
+  layoutMode = 'collapsible-dock',
+  onLayoutModeChange,
 }) => {
   const [isExportOpen, setIsExportOpen] = useState(false);
   const [isThemeMenuOpen, setIsThemeMenuOpen] = useState(false);
@@ -125,6 +132,64 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
             <span className="hidden xs:inline">Kokpit</span>
           </button>
         </div>
+
+        {/* Çalışma Alanı Düzeni Seçici (Segmented Control - Sadece İstasyon Görünümünde) */}
+        {activeView === 'station' && onLayoutModeChange && (
+          <div 
+            className="hidden md:flex items-center bg-theme-card p-0.5 rounded-lg border border-theme-subtle text-xs shrink-0"
+            role="group"
+            aria-label="Çalışma Alanı Düzeni"
+          >
+            <button
+              type="button"
+              data-testid="layout-mode-dock"
+              onClick={() => onLayoutModeChange('collapsible-dock')}
+              title="Akıllı Ray (Önerilen: 48px mini ray, üzerine gelince açılır, geniş önizleme masası)"
+              className={`flex items-center space-x-1.5 px-2 py-1 rounded-md text-[11px] font-medium transition-all tactile-btn ${
+                layoutMode === 'collapsible-dock'
+                  ? 'bg-blue-600 text-white font-semibold shadow-xs'
+                  : 'text-theme-muted hover:text-theme-primary hover:bg-theme-card-hover'
+              }`}
+            >
+              <Sidebar className="w-3.5 h-3.5" />
+              <span className="hidden xl:inline">Akıllı Ray</span>
+              {layoutMode === 'collapsible-dock' && (
+                <span className="w-1.5 h-1.5 rounded-full bg-cyan-300 animate-pulse ml-0.5" />
+              )}
+            </button>
+
+            <button
+              type="button"
+              data-testid="layout-mode-three-col"
+              onClick={() => onLayoutModeChange('three-column')}
+              title="Klasik Sabit 3 Sütun (Kuyruk + Önizleme + Editör)"
+              className={`flex items-center space-x-1.5 px-2 py-1 rounded-md text-[11px] font-medium transition-all tactile-btn ${
+                layoutMode === 'three-column'
+                  ? 'bg-blue-600 text-white font-semibold shadow-xs'
+                  : 'text-theme-muted hover:text-theme-primary hover:bg-theme-card-hover'
+              }`}
+            >
+              <Columns className="w-3.5 h-3.5" />
+              <span className="hidden xl:inline">3 Sütun</span>
+            </button>
+
+            <button
+              type="button"
+              data-testid="layout-mode-focus"
+              onClick={() => onLayoutModeChange('focus-studio')}
+              title="Süper Odak Studio (Kuyruk Gizli, Geniş Önizleme + Form) [Kısayol: []"
+              className={`flex items-center space-x-1.5 px-2 py-1 rounded-md text-[11px] font-medium transition-all tactile-btn ${
+                layoutMode === 'focus-studio'
+                  ? 'bg-blue-600 text-white font-semibold shadow-xs'
+                  : 'text-theme-muted hover:text-theme-primary hover:bg-theme-card-hover'
+              }`}
+            >
+              <Maximize2 className="w-3.5 h-3.5" />
+              <span className="hidden xl:inline">Odak (2 Sütun)</span>
+              <span className="text-[9px] font-mono opacity-70 ml-0.5 px-1 py-0.2 rounded bg-black/20">[</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Orta Kısım: Operasyonel İrsaliye Sayaçları (Masaüstü) */}
@@ -370,6 +435,44 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
                 {apiKeyStatus?.is_configured ? 'Tanımlı' : 'Eksik'}
               </span>
             </button>
+
+            {activeView === 'station' && onLayoutModeChange && (
+              <div className="flex items-center justify-between p-1.5 rounded-lg bg-theme-card border border-theme-subtle">
+                <span className="text-[11px] text-theme-muted font-medium px-1">Düzen:</span>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onLayoutModeChange('collapsible-dock');
+                      setIsMobileMenuOpen(false);
+                    }}
+                    className={`px-2 py-1 rounded text-[10px] font-semibold ${layoutMode === 'collapsible-dock' ? 'bg-blue-600 text-white' : 'text-theme-muted'}`}
+                  >
+                    Ray
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onLayoutModeChange('three-column');
+                      setIsMobileMenuOpen(false);
+                    }}
+                    className={`px-2 py-1 rounded text-[10px] font-semibold ${layoutMode === 'three-column' ? 'bg-blue-600 text-white' : 'text-theme-muted'}`}
+                  >
+                    3 Sütun
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onLayoutModeChange('focus-studio');
+                      setIsMobileMenuOpen(false);
+                    }}
+                    className={`px-2 py-1 rounded text-[10px] font-semibold ${layoutMode === 'focus-studio' ? 'bg-blue-600 text-white' : 'text-theme-muted'}`}
+                  >
+                    Odak
+                  </button>
+                </div>
+              </div>
+            )}
 
             <button
               onClick={() => {

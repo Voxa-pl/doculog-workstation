@@ -39,6 +39,8 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
   const fitZoomRef = useRef<number>(1);
+  const zoomRef = useRef<number>(1);
+  zoomRef.current = zoom;
   const rotationRef = useRef<number>(0);
   rotationRef.current = rotation;
 
@@ -108,7 +110,12 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
   useEffect(() => {
     if (!containerRef.current) return;
     const ro = new ResizeObserver(() => {
-      handleFitToScreen();
+      // Sadece kullanıcı zaten yaklaşık varsayılan sığdırma (fit) modundaysa yeniden hesapla;
+      // operatörün manuel zoom odağını koru
+      const isAtDefaultFit = Math.abs(zoomRef.current - fitZoomRef.current) < 0.08;
+      if (isAtDefaultFit) {
+        handleFitToScreen();
+      }
     });
     ro.observe(containerRef.current);
     return () => ro.disconnect();

@@ -5,7 +5,8 @@ import {
   ApiKeyStatus,
   AppTheme,
   AppView,
-  MobileTab
+  MobileTab,
+  WorkspaceLayoutMode
 } from './types/irsaliye';
 import { documentApi } from './services/api';
 import { useLiveSync } from './hooks/useLiveSync';
@@ -14,6 +15,7 @@ import { StatusBar } from './components/common/StatusBar';
 import { ApiKeyModal } from './components/common/ApiKeyModal';
 import { QrBridgeModal } from './components/common/QrBridgeModal';
 import { BatchQueue } from './components/queue/BatchQueue';
+import { CollapsibleDockRail } from './components/queue/CollapsibleDockRail';
 import { DocumentViewer } from './components/viewer/DocumentViewer';
 import { DocumentEditor } from './components/editor/DocumentEditor';
 import { ExecutiveDashboard } from './components/dashboard/ExecutiveDashboard';
@@ -23,7 +25,10 @@ import {
   Eye, 
   FileEdit, 
   Layers,
-  AlertTriangle
+  AlertTriangle,
+  Pin,
+  ChevronLeft,
+  Sidebar
 } from 'lucide-react';
 
 export const App: React.FC = () => {
@@ -50,12 +55,124 @@ export const App: React.FC = () => {
   const [pendingDocId, setPendingDocId] = useState<string | null>(null);
   const [isUnsavedModalOpen, setIsUnsavedModalOpen] = useState(false);
 
-  // View Navigation, Theme and Mobile Navigation states
+  // View Navigation, Theme, Layout and Mobile Navigation states
   const [activeView, setActiveView] = useState<AppView>('station');
   const [mobileTab, setMobileTab] = useState<MobileTab>('queue');
   const [theme, setTheme] = useState<AppTheme>(() => {
     return (localStorage.getItem('doculog_theme') as AppTheme) || 'koyu-kurumsal';
   });
+  const [layoutMode, setLayoutMode] = useState<WorkspaceLayoutMode>(() => {
+    try {
+      const saved = localStorage.getItem('doculog_layout_mode');
+      if (saved === 'three-column' || saved === 'collapsible-dock' || saved === 'focus-studio') {
+        return saved;
+      }
+    } catch (e) {
+      console.warn('Layout mode okunamadı:', e);
+    }
+    return 'collapsible-dock'; // Varsayılan: Akıllı Çekmece
+  });
+
+  // Kalıcı düzen modu kaydı
+  useEffect(() => {
+    try {
+      localStorage.setItem('doculog_layout_mode', layoutMode);
+    } catch (e) {
+      console.warn('Layout mode kaydedilemedi:', e);
+    }
+  }, [layoutMode]);
+
+  // Akıllı Çekmece (Peek Drawer) Hover Zamanlama Kontrolü
+  const [isQueuePeeking, setIsQueuePeeking] = useState(false);
+  const enterTimerRef = useRef<number | null>(null);
+  const leaveTimerRef = useRef<number | null>(null);
+
+  const handleTriggerPeekOpen = useCallback(() => {
+    if (leaveTimerRef.current !== null) {
+      clearTimeout(leaveTimerRef.current);
+      leaveTimerRef.current = null;
+    }
+    if (!isQueuePeeking && layoutMode === 'collapsible-dock') {
+      enterTimerRef.current = window.setTimeout(() => {
+        setIsQueuePeeking(true);
+        enterTimerRef.current = null;
+      }, 110); // 110ms Intent gating threshold
+    }
+  }, [isQueuePeeking, layoutMode]);
+
+  const handleTriggerPeekImmediate = useCallback(() => {
+    if (leaveTimerRef.current !== null) {
+      clearTimeout(leaveTimerRef.current);
+      leaveTimerRef.current = null;
+    }
+    if (enterTimerRef.current !== null) {
+      clearTimeout(enterTimerRef.current);
+      enterTimerRef.current = null;
+    }
+    setIsQueuePeeking(true);
+  }, []);
+
+  const handleCancelPeekClose = useCallback(() => {
+    if (leaveTimerRef.current !== null) {
+      clearTimeout(leaveTimerRef.current);
+      leaveTimerRef.current = null;
+    }
+  }, []);
+
+  const handleSchedulePeekClose = useCallback(() => {
+    if (enterTimerRef.current !== null) {
+      clearTimeout(enterTimerRef.current);
+      enterTimerRef.current = null;
+    }
+    leaveTimerRef.current = window.setTimeout(() => {
+      setIsQueuePeeking(false);
+      leaveTimerRef.current = null;
+    }, 280); // 280ms Grace period buffer
+  }, []);
+
+  // Timer cleanup
+  useEffect(() => {
+    return () => {
+      if (enterTimerRef.current) clearTimeout(enterTimerRef.current);
+      if (leaveTimerRef.current) clearTimeout(leaveTimerRef.current);
+    };
+  }, []);
+
+  // Klavye kısayolu '[' ile Akıllı Çekmece / Odak Stüdyo döngüsü ve 'Esc' ile kapatma
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const activeEl = document.activeElement as HTMLElement | null;
+      const currentEl = target || activeEl;
+
+      if (currentEl) {
+        const tagName = currentEl.tagName?.toLowerCase();
+        const isInput = tagName === 'input' || tagName === 'textarea' || tagName === 'select';
+        const isContentEditable = currentEl.isContentEditable;
+        if (isInput || isContentEditable) {
+          return; // Form alanlarında yazı yazılıyorken kısayolu yutma
+        }
+      }
+
+      if (e.key === 'Escape' && isQueuePeeking) {
+        e.preventDefault();
+        setIsQueuePeeking(false);
+        return;
+      }
+
+      if (e.key === '[' && !e.ctrlKey && !e.altKey && !e.metaKey) {
+        e.preventDefault();
+        setLayoutMode((prev) => {
+          if (prev === 'focus-studio') return 'collapsible-dock';
+          if (prev === 'collapsible-dock') return 'focus-studio';
+          return 'collapsible-dock';
+        });
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isQueuePeeking]);
 
   // Apply data-theme attribute to DOM root and body
   useEffect(() => {
@@ -381,15 +498,17 @@ export const App: React.FC = () => {
         onViewChange={setActiveView}
         theme={theme}
         onThemeChange={setTheme}
+        layoutMode={layoutMode}
+        onLayoutModeChange={setLayoutMode}
       />
 
-      {/* Ana Çalışma Alanı: Desktop 3-Sütun / Mobil Tek Sütun Tab Değişimi */}
+      {/* Ana Çalışma Alanı: Desktop 3 Farklı Mod / Mobil Sekme Değişimi */}
       <div className="flex-1 flex overflow-hidden relative">
         {/* İstasyon Görünümü */}
-        <div className={`flex-1 flex flex-col md:flex-row overflow-hidden ${activeView === 'station' ? 'flex' : 'hidden'}`}>
+        <div className={`flex-1 flex flex-col md:flex-row overflow-hidden relative ${activeView === 'station' ? 'flex' : 'hidden'}`}>
           
-          {/* 1. Sütun: Kuyruk (Desktop: w-64 / lg:w-72 kompakt sol sütun | Mobil: 'queue' sekmesinde tam ekran) */}
-          <div className={`h-full min-w-0 w-full md:w-64 lg:w-72 shrink-0 overflow-hidden ${mobileTab === 'queue' ? 'flex flex-1' : 'hidden'} md:flex`}>
+          {/* Mobil Sütun: Kuyruk (Yalnızca mobil cihazlarda 'queue' sekmesinde tam ekran) */}
+          <div className={`h-full min-w-0 w-full overflow-hidden ${mobileTab === 'queue' ? 'flex flex-1' : 'hidden'} md:hidden`}>
             <ErrorBoundary panelName="Evrak Kuyruğu" onReset={fetchDocuments}>
               <BatchQueue
                 documents={documents}
@@ -406,8 +525,139 @@ export const App: React.FC = () => {
             </ErrorBoundary>
           </div>
 
+          {/* Desktop Mod 1: Klasik Sabit 3 Sütun */}
+          {layoutMode === 'three-column' && (
+            <div className="hidden md:flex h-full min-w-0 w-64 lg:w-72 shrink-0 overflow-hidden border-r border-theme-subtle">
+              <ErrorBoundary panelName="Evrak Kuyruğu" onReset={fetchDocuments}>
+                <BatchQueue
+                  documents={documents}
+                  selectedDocId={selectedDocId}
+                  summary={summary}
+                  onSelectDoc={requestSelectDoc}
+                  onUploadFiles={handleUploadFiles}
+                  onDeleteDoc={handleDeleteDoc}
+                  onProcessDoc={handleProcessDoc}
+                  onLoadDemo={handleLoadDemo}
+                  onMergeDocuments={handleMergeDocuments}
+                  isUploading={isUploading}
+                />
+              </ErrorBoundary>
+            </div>
+          )}
+
+          {/* Desktop Mod 2: Akıllı Çekmece (48px Mini Ray + Hover Peek Drawer) */}
+          {layoutMode === 'collapsible-dock' && (
+            <>
+              {/* 48px Sabit Mini Ray */}
+              <div className="hidden md:flex h-full shrink-0">
+                <CollapsibleDockRail
+                  totalDocs={documents.length}
+                  summary={summary}
+                  onTriggerPeekOpen={handleTriggerPeekImmediate}
+                  onTriggerPeekClose={handleSchedulePeekClose}
+                  onUploadFiles={handleUploadFiles}
+                />
+              </div>
+
+              {/* Hover Tetikleyici Görünmez Sol Şerit (Fare sol kenara yaklaştığında açılmayı hızlandırır) */}
+              <div
+                onMouseEnter={handleTriggerPeekOpen}
+                className="hidden md:block absolute top-0 bottom-0 left-0 w-3 z-30 pointer-events-auto"
+                aria-hidden="true"
+              />
+
+              {/* Arka Plan Cam Katmanı (Çekmece Açıkken) */}
+              <div
+                onClick={() => setIsQueuePeeking(false)}
+                className={`hidden md:block fixed inset-0 z-30 bg-black/20 backdrop-blur-[1px] peek-drawer-backdrop ${
+                  isQueuePeeking ? 'is-active' : ''
+                }`}
+              />
+
+              {/* Akıllı Çekmece Gövdesi (Floating Overlay Panel) */}
+              <div
+                onMouseEnter={handleCancelPeekClose}
+                onMouseLeave={handleSchedulePeekClose}
+                className={`hidden md:flex absolute top-0 bottom-0 left-12 w-72 lg:w-80 z-40 bg-theme-surface/95 backdrop-blur-md border-r border-theme-strong shadow-2xl flex-col peek-drawer-panel ${
+                  isQueuePeeking ? 'is-open' : ''
+                }`}
+                style={{
+                  boxShadow: isQueuePeeking
+                    ? 'inset 0 1px 0 0 rgba(255, 255, 255, 0.1), 12px 0 36px -4px rgba(0, 0, 0, 0.7)'
+                    : 'none',
+                }}
+              >
+                {/* Çekmece Üst Başlığı & Sabitle / Kapat */}
+                <div className="h-11 border-b border-theme-subtle px-3 flex items-center justify-between shrink-0 bg-theme-surface/90">
+                  <div className="flex items-center space-x-2">
+                    <Layers className="w-4 h-4 text-blue-400" />
+                    <span className="text-xs font-bold text-theme-primary uppercase tracking-wider">
+                      Evrak Kuyruğu ({documents.length})
+                    </span>
+                  </div>
+
+                  <div className="flex items-center space-x-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLayoutMode('three-column');
+                        setIsQueuePeeking(false);
+                      }}
+                      title="Çekmeceyi Sabitle (Sabit 3-Sütun Modu)"
+                      className="p-1.5 rounded-md text-theme-muted hover:text-blue-400 hover:bg-theme-card transition-colors"
+                    >
+                      <Pin className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsQueuePeeking(false)}
+                      title="Çekmeceyi Kapat (Esc)"
+                      className="p-1.5 rounded-md text-theme-muted hover:text-theme-primary hover:bg-theme-card transition-colors"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Kuyruk Listesi */}
+                <div className="flex-1 overflow-hidden">
+                  <ErrorBoundary panelName="Evrak Kuyruğu" onReset={fetchDocuments}>
+                    <BatchQueue
+                      documents={documents}
+                      selectedDocId={selectedDocId}
+                      summary={summary}
+                      onSelectDoc={(id) => {
+                        requestSelectDoc(id);
+                      }}
+                      onUploadFiles={handleUploadFiles}
+                      onDeleteDoc={handleDeleteDoc}
+                      onProcessDoc={handleProcessDoc}
+                      onLoadDemo={handleLoadDemo}
+                      onMergeDocuments={handleMergeDocuments}
+                      isUploading={isUploading}
+                    />
+                  </ErrorBoundary>
+                </div>
+              </div>
+            </>
+          )}
+
           {/* 2. Sütun: Önizleme / Viewer (Desktop: Esnek dengeli orta sütun | Mobil: 'viewer' sekmesinde tam ekran) */}
-          <div className={`h-full min-w-0 w-full overflow-hidden ${mobileTab === 'viewer' ? 'flex flex-1' : 'hidden'} md:flex md:flex-1`}>
+          <div className={`h-full min-w-0 w-full overflow-hidden ${mobileTab === 'viewer' ? 'flex flex-1' : 'hidden'} md:flex md:flex-1 relative`}>
+            {/* Desktop Mod 3 (Süper Odak): Kuyruğu Açma Yüzer Butonu */}
+            {layoutMode === 'focus-studio' && (
+              <button
+                type="button"
+                onClick={() => setLayoutMode('collapsible-dock')}
+                title="Kuyruğu Aç (Kısayol: [ )"
+                className="absolute top-2.5 left-2.5 z-20 hidden md:flex items-center space-x-1.5 px-2.5 py-1 rounded-lg bg-theme-surface/90 hover:bg-theme-card text-theme-secondary hover:text-theme-primary border border-theme-subtle shadow-md backdrop-blur-sm text-xs font-medium transition-all group active:scale-95"
+              >
+                <Sidebar className="w-3.5 h-3.5 text-blue-400 group-hover:scale-110 transition-transform" />
+                <span>Kuyruk</span>
+                <span className="text-[10px] font-mono text-theme-muted bg-theme-panel px-1 py-0.2 rounded border border-theme-subtle">[</span>
+              </button>
+            )}
+
             <ErrorBoundary panelName="Evrak Önizleme Masası">
               <DocumentViewer
                 document={selectedDoc}
@@ -420,7 +670,7 @@ export const App: React.FC = () => {
           </div>
 
           {/* 3. Sütun: Düzenleme Formu / Editor (Desktop: Ferah ve dikey uyumlu sağ sütun | Mobil: 'editor' sekmesinde tam ekran) */}
-          <div className={`h-full min-w-0 w-full md:w-[440px] lg:w-[480px] xl:w-[540px] 2xl:w-[580px] shrink-0 overflow-hidden ${mobileTab === 'editor' ? 'flex flex-1' : 'hidden'} md:flex`}>
+          <div className={`h-full min-w-0 w-full md:w-[440px] lg:w-[480px] xl:w-[540px] 2xl:w-[580px] shrink-0 overflow-hidden ${mobileTab === 'editor' ? 'flex flex-1' : 'hidden'} md:flex border-l border-theme-subtle`}>
             <ErrorBoundary panelName="Doğrulama ve Düzenleme Formu">
               <DocumentEditor
                 document={selectedDoc}

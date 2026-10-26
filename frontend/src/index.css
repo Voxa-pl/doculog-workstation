@@ -418,5 +418,59 @@ input[type="number"],
   box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.35);
 }
 
+/* ==========================================================================
+   11. PEEK DRAWER (AKILLI ÇEKMECE) HARDWARE & FLICKER-FREE ACCELERATION
+   ========================================================================== */
+
+.peek-drawer-panel {
+  transform: translate3d(-100%, 0, 0);
+  transition: transform 190ms cubic-bezier(0.4, 0, 1, 1),
+              box-shadow 240ms cubic-bezier(0.16, 1, 0.3, 1),
+              border-color 160ms ease;
+  backface-visibility: hidden;
+  perspective: 1000px;
+  contain: layout paint;
+}
+
+.peek-drawer-panel.is-open {
+  transform: translate3d(0, 0, 0);
+  transition: transform 240ms cubic-bezier(0.16, 1, 0.3, 1),
+              box-shadow 240ms cubic-bezier(0.16, 1, 0.3, 1),
+              border-color 160ms ease;
+  box-shadow: 12px 0 32px -4px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+/* Kilitlenme mikro-flaşı (Sağ kenar 1px ışık darbesi) */
+@keyframes drawerLockFlash {
+  0% { border-right-color: rgba(56, 189, 248, 0.85); box-shadow: 2px 0 14px rgba(56, 189, 248, 0.35); }
+  100% { border-right-color: var(--border-subtle); box-shadow: none; }
+}
+
+.drawer-wall-locked {
+  animation: drawerLockFlash 180ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.peek-drawer-backdrop {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 190ms cubic-bezier(0.4, 0, 1, 1);
+}
+
+.peek-drawer-backdrop.is-active {
+  opacity: 1;
+  pointer-events: auto;
+  transition: opacity 240ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Klavye Kısayolu KBD Rozet Haptiği */
+.kbd-tactile-press {
+  transition: transform 90ms cubic-bezier(0.2, 0, 0, 1),
+              background-color 90ms ease;
+}
+.kbd-tactile-press:active {
+  transform: translateY(1px) scale(0.92);
+}
+
+
 
 

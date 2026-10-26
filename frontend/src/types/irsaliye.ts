@@ -94,6 +94,7 @@ export interface QrBridgeInfo {
 export type AppTheme = 'koyu-kurumsal' | 'gece-vardiyasi' | 'acik-ofis';
 export type AppView = 'station' | 'dashboard';
 export type MobileTab = 'queue' | 'viewer' | 'editor';
+export type WorkspaceLayoutMode = 'three-column' | 'collapsible-dock' | 'focus-studio';
 
 export interface KpiMetrics {
   toplam_irsaliye_hacmi: number;
