@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback, useDeferredValue } from 'react';
 import { 
   DocumentItem, 
   BatchSummary 
@@ -11,8 +11,7 @@ import {
   FolderDown, 
   AlertCircle,
   Sparkles,
-  Merge,
-  RotateCcw
+  Merge
 } from 'lucide-react';
 
 interface BatchQueueProps {
@@ -29,7 +28,32 @@ interface BatchQueueProps {
   isUploading: boolean;
 }
 
-export const BatchQueue: React.FC<BatchQueueProps> = ({
+type QueueFilterMode = 'all' | 'invoices' | 'pending' | 'non_invoices';
+
+// Modül Seviyesinde Yardımcı Fonksiyonlar (Sıfır GC baskısı, referans kararlılığı)
+const normalizeTr = (s?: string | null): string => (s || '').toLocaleLowerCase('tr-TR').trim();
+
+const isDocNonInvoice = (doc: DocumentItem): boolean => {
+  return Boolean(
+    doc.veri && (
+      (typeof doc.veri.guven_skoru === 'number' && Number.isFinite(doc.veri.guven_skoru) && doc.veri.guven_skoru === 0) ||
+      (doc.veri.genel_notlar && doc.veri.genel_notlar.toLowerCase().includes('sevk irsaliyesi değildir')) ||
+      (!doc.veri.header?.irsaliye_no && !doc.veri.header?.gonderici_unvan && (!doc.veri.kalemler || doc.veri.kalemler.length === 0))
+    )
+  );
+};
+
+const isDocPending = (doc: DocumentItem): boolean => {
+  if (isDocNonInvoice(doc)) return false;
+  return doc.durum === 'kuyrukta' || doc.durum === 'isleniyor' || doc.durum === 'hata';
+};
+
+const isDocInvoice = (doc: DocumentItem): boolean => {
+  if (isDocNonInvoice(doc)) return false;
+  return doc.durum === 'tamamlandi' || doc.durum === 'onaylandi';
+};
+
+export const BatchQueue: React.FC<BatchQueueProps> = React.memo(({
   documents,
   selectedDocId,
   summary,
@@ -39,18 +63,30 @@ export const BatchQueue: React.FC<BatchQueueProps> = ({
   onProcessDoc,
   onLoadDemo,
   onMergeDocuments,
-  onResetAll,
+  onResetAll: _onResetAll,
   isUploading,
 }) => {
-  type QueueFilterMode = 'all' | 'invoices' | 'pending' | 'non_invoices';
   const [filterMode, setFilterMode] = useState<QueueFilterMode>('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [isDragOver, setIsDragOver] = useState(false);
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [checkedDocIds, setCheckedDocIds] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const safeDocs = Array.isArray(documents) ? documents : [];
+  // 100ms Hafif Debounce: Kullanıcı hızlı yazdığında kuyruğu kilitlemeden arama terimini günceller
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  // React 19 Concurrent useDeferredValue: Arama filtreleme hesaplamasını düşük öncelikli transition yapar
+  const deferredSearchTerm = useDeferredValue(debouncedSearchTerm);
+
+  const safeDocs = useMemo(() => (Array.isArray(documents) ? documents : []), [documents]);
+
   const safeSummary: BatchSummary = summary || {
     toplam_belge: 0,
     kuyrukta: 0,
@@ -60,96 +96,138 @@ export const BatchQueue: React.FC<BatchQueueProps> = ({
     onaylanan: 0,
   };
 
-  const isDocNonInvoice = (doc: DocumentItem) => {
-    return Boolean(
-      doc.veri && (
-        (typeof doc.veri.guven_skoru === 'number' && Number.isFinite(doc.veri.guven_skoru) && doc.veri.guven_skoru === 0) ||
-        (doc.veri.genel_notlar && doc.veri.genel_notlar.toLowerCase().includes('sevk irsaliyesi değildir')) ||
-        (!doc.veri.header?.irsaliye_no && !doc.veri.header?.gonderici_unvan && (!doc.veri.kalemler || doc.veri.kalemler.length === 0))
-      )
-    );
-  };
+  // Tek geçişte O(N) Kategori Sayımı (500+ evrakta 3 ayrı filter döngüsü yerine 1 defada)
+  const { invoiceCount, pendingCount, nonInvoiceCount } = useMemo(() => {
+    let inv = 0;
+    let pnd = 0;
+    let non = 0;
+    for (let i = 0; i < safeDocs.length; i++) {
+      const doc = safeDocs[i];
+      if (isDocNonInvoice(doc)) {
+        non++;
+      } else if (doc.durum === 'tamamlandi' || doc.durum === 'onaylandi') {
+        inv++;
+      } else if (doc.durum === 'kuyrukta' || doc.durum === 'isleniyor' || doc.durum === 'hata') {
+        pnd++;
+      }
+    }
+    return { invoiceCount: inv, pendingCount: pnd, nonInvoiceCount: non };
+  }, [safeDocs]);
 
-  const isDocPending = (doc: DocumentItem) => {
-    if (isDocNonInvoice(doc)) return false;
-    return doc.durum === 'kuyrukta' || doc.durum === 'isleniyor' || doc.durum === 'hata';
-  };
+  // Arama & Filtreleme Sonuçları (useMemo ile memoize edildi)
+  const filteredDocs = useMemo(() => {
+    const term = normalizeTr(deferredSearchTerm);
+    const hasFilter = filterMode !== 'all';
 
-  const isDocInvoice = (doc: DocumentItem) => {
-    if (isDocNonInvoice(doc)) return false;
-    return doc.durum === 'tamamlandi' || doc.durum === 'onaylandi';
-  };
-
-  const invoiceCount = safeDocs.filter(isDocInvoice).length;
-  const pendingCount = safeDocs.filter(isDocPending).length;
-  const nonInvoiceCount = safeDocs.filter(isDocNonInvoice).length;
-
-  // Türkçe Karakter Normalizasyonu (BUG-04 Çözümü)
-  const normalizeTr = (s?: string | null) => (s || '').toLocaleLowerCase('tr-TR').trim();
-
-  const filteredDocs = safeDocs.filter((doc) => {
-    // 1. Kategori Filtresi (4 Kategori: Tümü, İrsaliye, Bekleyen, Uyumsuz)
-    if (filterMode === 'invoices') {
-      if (!isDocInvoice(doc)) return false;
-    } else if (filterMode === 'pending') {
-      if (!isDocPending(doc)) return false;
-    } else if (filterMode === 'non_invoices') {
-      if (!isDocNonInvoice(doc)) return false;
+    // Arama ve filtre yoksa doğrudan safeDocs referansı dön (sıfır array kopyalama)
+    if (!term && !hasFilter) {
+      return safeDocs;
     }
 
-    // 2. Arama Filtresi
-    const term = normalizeTr(searchTerm);
-    if (!term) return true;
-    const fileNameMatch = normalizeTr(doc?.dosya_adi).includes(term);
-    const irsaliyeNoMatch = normalizeTr(doc?.veri?.header?.irsaliye_no).includes(term);
-    const unvanMatch =
-      normalizeTr(doc?.veri?.header?.alici_unvan).includes(term) ||
-      normalizeTr(doc?.veri?.header?.gonderici_unvan).includes(term);
-    return fileNameMatch || !!irsaliyeNoMatch || !!unvanMatch;
-  });
+    return safeDocs.filter((doc) => {
+      // 1. Kategori Filtresi
+      if (filterMode === 'invoices') {
+        if (!isDocInvoice(doc)) return false;
+      } else if (filterMode === 'pending') {
+        if (!isDocPending(doc)) return false;
+      } else if (filterMode === 'non_invoices') {
+        if (!isDocNonInvoice(doc)) return false;
+      }
 
-  const handleDragOver = (e: React.DragEvent) => {
+      // 2. Arama Filtresi
+      if (!term) return true;
+      const fileNameMatch = normalizeTr(doc?.dosya_adi).includes(term);
+      const irsaliyeNoMatch = normalizeTr(doc?.veri?.header?.irsaliye_no).includes(term);
+      const unvanMatch =
+        normalizeTr(doc?.veri?.header?.alici_unvan).includes(term) ||
+        normalizeTr(doc?.veri?.header?.gonderici_unvan).includes(term);
+      return fileNameMatch || !!irsaliyeNoMatch || !!unvanMatch;
+    });
+  }, [safeDocs, filterMode, deferredSearchTerm]);
+
+  // O(1) Set Lookup: Çoklu seçimde 500 eleman için O(N) includes kontrolünü engeller
+  const checkedDocIdsSet = useMemo(() => new Set(checkedDocIds), [checkedDocIds]);
+
+  const validCheckedDocIds = useMemo(
+    () => checkedDocIds.filter((id) => safeDocs.some((d) => d.id === id)),
+    [checkedDocIds, safeDocs]
+  );
+
+  // Sabit Callback Handler'lar: QueueItem re-render izolasyonu için useCallback ile korunur
+  const handleSelectDoc = useCallback(
+    (id: string) => {
+      onSelectDoc(id);
+    },
+    [onSelectDoc]
+  );
+
+  const handleDeleteDoc = useCallback(
+    (id: string, e: React.MouseEvent) => {
+      e.stopPropagation();
+      onDeleteDoc(id);
+    },
+    [onDeleteDoc]
+  );
+
+  const handleProcessDoc = useCallback(
+    (id: string, e: React.MouseEvent) => {
+      e.stopPropagation();
+      onProcessDoc(id);
+    },
+    [onProcessDoc]
+  );
+
+  const handleToggleCheck = useCallback((id: string) => {
+    setCheckedDocIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setIsDragOver(true);
-  };
+  }, []);
 
-  const handleDragLeave = () => {
+  const handleDragLeave = useCallback(() => {
     setIsDragOver(false);
-  };
+  }, []);
 
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragOver(false);
-    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      const filesArray = Array.from(e.dataTransfer.files);
-      onUploadFiles(filesArray);
-    }
-  };
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      setIsDragOver(false);
+      if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+        const filesArray = Array.from(e.dataTransfer.files);
+        onUploadFiles(filesArray);
+      }
+    },
+    [onUploadFiles]
+  );
 
-  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      const filesArray = Array.from(e.target.files);
-      onUploadFiles(filesArray);
-      e.target.value = '';
-    }
-  };
+  const handleFileInputChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (e.target.files && e.target.files.length > 0) {
+        const filesArray = Array.from(e.target.files);
+        onUploadFiles(filesArray);
+        e.target.value = '';
+      }
+    },
+    [onUploadFiles]
+  );
 
-  const toggleCheck = (docId: string) => {
-    setCheckedDocIds((prev) =>
-      prev.includes(docId) ? prev.filter((id) => id !== docId) : [...prev, docId]
-    );
-  };
-
-  const validCheckedDocIds = checkedDocIds.filter((id) => safeDocs.some((d) => d.id === id));
-
-  const handleMergeAction = () => {
+  const handleMergeAction = useCallback(() => {
     if (validCheckedDocIds.length < 2 || !onMergeDocuments) return;
     const targetId = validCheckedDocIds[0];
     const sourceIds = validCheckedDocIds.slice(1);
     onMergeDocuments(targetId, sourceIds);
     setCheckedDocIds([]);
     setIsSelectionMode(false);
-  };
+  }, [validCheckedDocIds, onMergeDocuments]);
+
+  const toggleSelectionMode = useCallback(() => {
+    setIsSelectionMode((prev) => !prev);
+    setCheckedDocIds([]);
+  }, []);
 
   return (
     <aside 
@@ -195,10 +273,7 @@ export const BatchQueue: React.FC<BatchQueueProps> = ({
               {(safeDocs.length >= 2 || isSelectionMode) && (
                 <button
                   type="button"
-                  onClick={() => {
-                    setIsSelectionMode(!isSelectionMode);
-                    setCheckedDocIds([]);
-                  }}
+                  onClick={toggleSelectionMode}
                   className={`text-xs px-2.5 py-1 min-h-[30px] rounded-md border shrink-0 transition-all font-medium ${
                     isSelectionMode
                       ? 'bg-purple-600 border-purple-500 text-white font-semibold'
@@ -233,7 +308,7 @@ export const BatchQueue: React.FC<BatchQueueProps> = ({
           <button
             type="button"
             onClick={handleMergeAction}
-            disabled={checkedDocIds.length < 2}
+            disabled={validCheckedDocIds.length < 2}
             className="flex items-center space-x-1 bg-purple-600 hover:bg-purple-500 disabled:opacity-40 text-white px-2.5 py-1 rounded-md text-xs font-semibold shadow-xs shrink-0"
           >
             <Merge className="w-3.5 h-3.5" />
@@ -353,17 +428,11 @@ export const BatchQueue: React.FC<BatchQueueProps> = ({
               doc={doc}
               isSelected={doc.id === selectedDocId}
               isSelectionMode={isSelectionMode}
-              isChecked={checkedDocIds.includes(doc.id)}
-              onToggleCheck={() => toggleCheck(doc.id)}
-              onSelect={() => onSelectDoc(doc.id)}
-              onDelete={(e) => {
-                e.stopPropagation();
-                onDeleteDoc(doc.id);
-              }}
-              onProcess={(e) => {
-                e.stopPropagation();
-                onProcessDoc(doc.id);
-              }}
+              isChecked={checkedDocIdsSet.has(doc.id)}
+              onToggleCheck={handleToggleCheck}
+              onSelect={handleSelectDoc}
+              onDelete={handleDeleteDoc}
+              onProcess={handleProcessDoc}
             />
           ))
         )}
@@ -378,4 +447,6 @@ export const BatchQueue: React.FC<BatchQueueProps> = ({
       )}
     </aside>
   );
-};
+});
+
+BatchQueue.displayName = 'BatchQueue';

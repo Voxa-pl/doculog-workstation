@@ -22,7 +22,11 @@ export default defineConfig({
             ) {
               return 'vendor-react';
             }
-            // UI & Yardımcı Kütüphaneler (Axios, Motion, clsx, tailwind-merge vb.)
+            // Motion animasyon kütüphanesi
+            if (id.includes('motion')) {
+              return 'vendor-motion';
+            }
+            // UI & Yardımcı Kütüphaneler (Axios, clsx, tailwind-merge vb.)
             return 'vendor-ui';
           }
         },

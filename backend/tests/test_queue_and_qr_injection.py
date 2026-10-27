@@ -2,6 +2,7 @@ import os
 import uuid
 import asyncio
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 from PIL import Image
 import qrcode
@@ -47,7 +48,8 @@ class TestQueueAndQRInjection(unittest.TestCase):
 
         try:
             # extract_from_image çağrısı (API keysiz fallback modunda bile QR zenginleştirmesi yapmalı)
-            extracted = gemini_extractor.extract_from_image(image_path=test_file)
+            with patch.object(gemini_extractor, "get_client", return_value=None):
+                extracted = gemini_extractor.extract_from_image(image_path=test_file)
             self.assertIsNotNone(extracted.header)
             self.assertEqual(extracted.header.irsaliye_no, "EKL2024000012490")
             self.assertEqual(extracted.header.gonderici_vkn, "3340058912")

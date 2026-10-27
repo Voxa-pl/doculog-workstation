@@ -36,11 +36,15 @@ class TestBackendResilience(unittest.TestCase):
     # =========================================================================
 
     def test_sqlite_wal_and_busy_timeout_pragmas(self):
-        """SQLite motorunun WAL modunda ve 5000ms busy_timeout ile çalıştığını doğrula"""
+        """SQLite motorunun WAL modunda ve zorunlu performans PRAGMA'ları ile çalıştığını doğrula"""
         with engine.connect() as conn:
             journal_mode = conn.exec_driver_sql("PRAGMA journal_mode;").scalar()
             busy_timeout = conn.exec_driver_sql("PRAGMA busy_timeout;").scalar()
             foreign_keys = conn.exec_driver_sql("PRAGMA foreign_keys;").scalar()
+            synchronous = conn.exec_driver_sql("PRAGMA synchronous;").scalar()
+            cache_size = conn.exec_driver_sql("PRAGMA cache_size;").scalar()
+            mmap_size = conn.exec_driver_sql("PRAGMA mmap_size;").scalar()
+            temp_store = conn.exec_driver_sql("PRAGMA temp_store;").scalar()
 
         self.assertEqual(
             str(journal_mode).lower(), "wal",
@@ -53,6 +57,22 @@ class TestBackendResilience(unittest.TestCase):
         self.assertEqual(
             int(foreign_keys), 1,
             f"SQLite foreign_keys aktif değil!"
+        )
+        self.assertEqual(
+            int(synchronous), 1,
+            f"SQLite synchronous NORMAL (1) değil! Mevcut: {synchronous}"
+        )
+        self.assertEqual(
+            int(cache_size), -64000,
+            f"SQLite cache_size 64MB (-64000) değil! Mevcut: {cache_size}"
+        )
+        self.assertEqual(
+            int(mmap_size), 268435456,
+            f"SQLite mmap_size 256MB değil! Mevcut: {mmap_size}"
+        )
+        self.assertEqual(
+            int(temp_store), 2,
+            f"SQLite temp_store MEMORY (2) değil! Mevcut: {temp_store}"
         )
 
     def test_concurrent_sqlite_writes(self):

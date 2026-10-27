@@ -1,8 +1,11 @@
-from sqlalchemy import Column, String, Integer, Float, Text, JSON, DateTime, create_engine, event
+from sqlalchemy import Column, String, Integer, Float, Text, JSON, DateTime, Index, create_engine, event
 from sqlalchemy.orm import declarative_base, sessionmaker
 from datetime import datetime
 from pathlib import Path
+import logging
 from ..core.config import settings
+
+logger = logging.getLogger(__name__)
 
 Base = declarative_base()
 
@@ -15,7 +18,7 @@ class DocumentModel(Base):
     dosya_url = Column(String(512), nullable=False)
     mime_type = Column(String(64), default="image/jpeg")
     boyut_bytes = Column(Integer, default=0)
-    yuklenme_tarihi = Column(String(64), nullable=False)
+    yuklenme_tarihi = Column(String(64), nullable=False, index=True)
     donus_acisi = Column(Integer, default=0)
     durum = Column(String(32), default="kuyrukta", index=True)
     hata_mesaji = Column(Text, nullable=True)
@@ -23,6 +26,13 @@ class DocumentModel(Base):
     sayfalar = Column(JSON, nullable=True)
     guncellenme_ts = Column(Integer, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+    __table_args__ = (
+        Index("idx_documents_durum_created_at", "durum", created_at.desc()),
+        Index("idx_documents_durum_yuklenme_tarihi", "durum", "yuklenme_tarihi"),
+        Index("idx_documents_durum_id", "durum", "id"),
+        Index("idx_documents_yuklenme_tarihi", "yuklenme_tarihi"),
+    )
 
 class ProductAliasModel(Base):
     """
@@ -46,15 +56,14 @@ engine = create_engine(
     f"sqlite:///{DB_PATH}",
     connect_args={"check_same_thread": False, "timeout": 30},
     poolclass=QueuePool,
-    pool_size=10,
-    max_overflow=20,
-    pool_timeout=30,
+    pool_size=100,
+    max_overflow=200,
+    pool_timeout=15,
     pool_recycle=1800,
     pool_pre_ping=True
 )
 
-@event.listens_for(engine, "connect")
-def set_sqlite_pragma(dbapi_connection, connection_record):
+def apply_sqlite_pragmas(dbapi_connection):
     """
     SQLite WAL Modu ve Connection Pool Performans Mimarisi:
     - journal_mode=WAL: Okuma ve yazmaların birbirini kilitlemesini engeller (Readers don't block Writers).
@@ -77,6 +86,10 @@ def set_sqlite_pragma(dbapi_connection, connection_record):
     cursor.execute("PRAGMA wal_autocheckpoint=1000;")
     cursor.close()
 
+@event.listens_for(engine, "connect")
+def set_sqlite_pragma(dbapi_connection, connection_record):
+    apply_sqlite_pragmas(dbapi_connection)
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def init_db():
@@ -85,6 +98,11 @@ def init_db():
     with engine.connect() as conn:
         conn.exec_driver_sql("PRAGMA journal_mode=WAL;")
         conn.exec_driver_sql("PRAGMA busy_timeout=10000;")
+        conn.exec_driver_sql("PRAGMA synchronous=NORMAL;")
+        conn.exec_driver_sql("PRAGMA cache_size=-64000;")
+        conn.exec_driver_sql("PRAGMA mmap_size=268435456;")
+        conn.exec_driver_sql("PRAGMA temp_store=MEMORY;")
+        conn.exec_driver_sql("PRAGMA wal_autocheckpoint=1000;")
         try:
             res = conn.exec_driver_sql("PRAGMA table_info(documents);").fetchall()
             existing_cols = [r[1] for r in res]
@@ -95,10 +113,19 @@ def init_db():
             pass
 
         # Performans İndeksleri
-        try:
-            conn.exec_driver_sql("CREATE INDEX IF NOT EXISTS idx_documents_created_at ON documents(created_at DESC);")
-            conn.exec_driver_sql("CREATE INDEX IF NOT EXISTS idx_documents_durum ON documents(durum);")
-            conn.commit()
-        except Exception:
-            pass
+        indexes = [
+            "CREATE INDEX IF NOT EXISTS idx_documents_id ON documents(id);",
+            "CREATE INDEX IF NOT EXISTS idx_documents_durum ON documents(durum);",
+            "CREATE INDEX IF NOT EXISTS idx_documents_created_at ON documents(created_at DESC);",
+            "CREATE INDEX IF NOT EXISTS idx_documents_yuklenme_tarihi ON documents(yuklenme_tarihi DESC);",
+            "CREATE INDEX IF NOT EXISTS idx_documents_durum_created_at ON documents(durum, created_at DESC);",
+            "CREATE INDEX IF NOT EXISTS idx_documents_durum_yuklenme_tarihi ON documents(durum, yuklenme_tarihi DESC);",
+            "CREATE INDEX IF NOT EXISTS idx_documents_durum_id ON documents(durum, id);",
+        ]
+        for idx_sql in indexes:
+            try:
+                conn.exec_driver_sql(idx_sql)
+            except Exception as e:
+                logger.warning(f"İndeks oluşturulurken hata ({idx_sql}): {e}")
+        conn.commit()
 

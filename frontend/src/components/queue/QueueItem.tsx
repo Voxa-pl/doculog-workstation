@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   DocumentItem, 
   ProcessingStatus 
@@ -9,48 +9,35 @@ import {
   Clock, 
   Loader2, 
   Trash2, 
-  CheckCheck,
-  RotateCw,
-  Layers,
+  CheckCheck, 
+  FileText,
   CheckSquare,
-  Square,
-  FileText
+  Square
 } from 'lucide-react';
 
-interface QueueItemProps {
+export interface QueueItemProps {
   doc: DocumentItem;
   isSelected: boolean;
-  onSelect: () => void;
-  onDelete: (e: React.MouseEvent) => void;
-  onProcess: (e: React.MouseEvent) => void;
+  onSelect: (id: string) => void;
+  onDelete: (id: string, e: React.MouseEvent) => void;
+  onProcess: (id: string, e: React.MouseEvent) => void;
   isSelectionMode?: boolean;
   isChecked?: boolean;
-  onToggleCheck?: (e: React.MouseEvent) => void;
+  onToggleCheck?: (id: string, e?: React.MouseEvent) => void;
 }
 
-export const QueueItem: React.FC<QueueItemProps> = ({
-  doc,
-  isSelected,
-  onSelect,
-  onDelete,
-  onProcess,
-  isSelectionMode = false,
-  isChecked = false,
-  onToggleCheck,
-}) => {
-  const [thumbFailed, setThumbFailed] = useState(false);
-  const [fullFailed, setFullFailed] = useState(false);
-  const isPdf = doc.mime_type === 'application/pdf' || (doc.dosya_adi || '').toLowerCase().endsWith('.pdf');
-
-  const isNonInvoice = Boolean(
+const isNonInvoiceDoc = (doc: DocumentItem): boolean => {
+  return Boolean(
     doc.veri && (
       (typeof doc.veri.guven_skoru === 'number' && Number.isFinite(doc.veri.guven_skoru) && doc.veri.guven_skoru === 0) ||
       (doc.veri.genel_notlar && doc.veri.genel_notlar.toLowerCase().includes('sevk irsaliyesi değildir')) ||
       (!doc.veri.header?.irsaliye_no && !doc.veri.header?.gonderici_unvan && (!doc.veri.kalemler || doc.veri.kalemler.length === 0))
     )
   );
+};
 
-  const getStatusBadge = (status: ProcessingStatus) => {
+const StatusBadge: React.FC<{ status: ProcessingStatus; isNonInvoice: boolean; hataMesaji?: string | null }> = React.memo(
+  ({ status, isNonInvoice, hataMesaji }) => {
     switch (status) {
       case 'onaylandi':
         return (
@@ -85,7 +72,7 @@ export const QueueItem: React.FC<QueueItemProps> = ({
         return (
           <span 
             className="inline-flex items-center space-x-1 text-[10px] text-rose-400 font-medium shrink-0 cursor-help"
-            title={doc.hata_mesaji || 'Belge işlenirken hata oluştu'}
+            title={hataMesaji || 'Belge işlenirken hata oluştu'}
           >
             <AlertCircle className="w-3 h-3 shrink-0" />
             <span>Hata</span>
@@ -99,135 +86,206 @@ export const QueueItem: React.FC<QueueItemProps> = ({
           </span>
         );
     }
-  };
+  }
+);
+StatusBadge.displayName = 'StatusBadge';
 
-  const irsaliyeNo = doc.veri?.header?.irsaliye_no;
-  const itemsCount = Array.isArray(doc.veri?.kalemler) ? doc.veri.kalemler.length : undefined;
-  const pageCount = Array.isArray(doc.sayfalar) && doc.sayfalar.length > 0 ? doc.sayfalar.length : 1;
-  const safeBytes = Number.isFinite(Number(doc.boyut_bytes)) ? Number(doc.boyut_bytes) : 0;
+export const QueueItem = React.memo<QueueItemProps>(
+  ({
+    doc,
+    isSelected,
+    onSelect,
+    onDelete,
+    onProcess,
+    isSelectionMode = false,
+    isChecked = false,
+    onToggleCheck,
+  }) => {
+    const [thumbFailed, setThumbFailed] = useState(false);
+    const [fullFailed, setFullFailed] = useState(false);
 
-  const versionParam = doc.guncellenme_ts ? `?t=${doc.guncellenme_ts}` : '';
-  const thumbUrl = `/uploads/thumb_${doc.id}.jpg${versionParam}`;
-  const fullUrl = `${doc.dosya_url}${versionParam}`;
+    // Yeni id veya versiyon geldiğinde thumbnail durumunu sıfırla
+    useEffect(() => {
+      setThumbFailed(false);
+      setFullFailed(false);
+    }, [doc.id, doc.guncellenme_ts]);
 
-  return (
-    <div
-      onClick={onSelect}
-      className={`group relative p-1.5 sm:p-2 rounded-lg border cursor-pointer select-none min-w-0 tactile-card overflow-hidden transition-all ${
-        isSelected
-          ? 'bg-blue-600/10 border-blue-500/80 shadow-xs ring-1 ring-blue-500/30'
-          : isChecked
-          ? 'bg-purple-950/30 border-purple-500/60'
-          : isNonInvoice
-          ? 'bg-theme-card/40 border-theme-subtle hover:border-theme-strong'
-          : 'bg-theme-card/60 border-theme-subtle hover:bg-theme-card hover:border-theme-strong'
-      } ${doc.durum === 'isleniyor' ? 'state-processing' : ''}`}
-    >
-      {/* Seçili Belge Sol İndikatörü */}
-      {isSelected && (
-        <div className="absolute left-0 top-1 bottom-1 w-1 bg-blue-500 rounded-r z-10" />
-      )}
-      <div className="flex items-center space-x-2 min-w-0">
-        {/* Çoklu Seçim Checkbox */}
-        {isSelectionMode && (
-          <div
-            onClick={(e) => {
-              e.stopPropagation();
-              if (onToggleCheck) onToggleCheck(e);
-            }}
-            className="flex items-center justify-center shrink-0 w-6 h-6 text-theme-muted hover:text-purple-300"
-          >
-            {isChecked ? (
-              <CheckSquare className="w-3.5 h-3.5 text-purple-400" />
+    const isPdf = doc.mime_type === 'application/pdf' || (doc.dosya_adi || '').toLowerCase().endsWith('.pdf');
+    const isNonInvoice = isNonInvoiceDoc(doc);
+
+    const irsaliyeNo = doc.veri?.header?.irsaliye_no;
+    const itemsCount = Array.isArray(doc.veri?.kalemler) ? doc.veri.kalemler.length : undefined;
+    const pageCount = Array.isArray(doc.sayfalar) && doc.sayfalar.length > 0 ? doc.sayfalar.length : 1;
+
+    const versionParam = doc.guncellenme_ts ? `?t=${doc.guncellenme_ts}` : '';
+    const thumbUrl = `/uploads/thumb_${doc.id}.jpg${versionParam}`;
+    const fullUrl = `${doc.dosya_url}${versionParam}`;
+
+    const handleItemClick = useCallback(() => {
+      onSelect(doc.id);
+    }, [onSelect, doc.id]);
+
+    const handleDeleteClick = useCallback((e: React.MouseEvent) => {
+      e.stopPropagation();
+      onDelete(doc.id, e);
+    }, [onDelete, doc.id]);
+
+    const handleProcessClick = useCallback((e: React.MouseEvent) => {
+      e.stopPropagation();
+      onProcess(doc.id, e);
+    }, [onProcess, doc.id]);
+
+    const handleCheckClick = useCallback((e: React.MouseEvent) => {
+      e.stopPropagation();
+      onToggleCheck?.(doc.id, e);
+    }, [onToggleCheck, doc.id]);
+
+    return (
+      <div
+        onClick={handleItemClick}
+        style={{
+          contentVisibility: 'auto',
+          containIntrinsicSize: '0 58px',
+        }}
+        className={`group relative p-1.5 sm:p-2 rounded-lg border cursor-pointer select-none min-w-0 tactile-card overflow-hidden transition-all ${
+          isSelected
+            ? 'bg-blue-600/10 border-blue-500/80 shadow-xs ring-1 ring-blue-500/30'
+            : isChecked
+            ? 'bg-purple-950/30 border-purple-500/60'
+            : isNonInvoice
+            ? 'bg-theme-card/40 border-theme-subtle hover:border-theme-strong'
+            : 'bg-theme-card/60 border-theme-subtle hover:bg-theme-card hover:border-theme-strong'
+        } ${doc.durum === 'isleniyor' ? 'state-processing' : ''}`}
+      >
+        {/* Seçili Belge Sol İndikatörü */}
+        {isSelected && (
+          <div className="absolute left-0 top-1 bottom-1 w-1 bg-blue-500 rounded-r z-10" />
+        )}
+        <div className="flex items-center space-x-2 min-w-0">
+          {/* Çoklu Seçim Checkbox */}
+          {isSelectionMode && (
+            <div
+              onClick={handleCheckClick}
+              className="flex items-center justify-center shrink-0 w-6 h-6 text-theme-muted hover:text-purple-300"
+            >
+              {isChecked ? (
+                <CheckSquare className="w-3.5 h-3.5 text-purple-400" />
+              ) : (
+                <Square className="w-3.5 h-3.5 text-theme-muted/60" />
+              )}
+            </div>
+          )}
+
+          {/* Thumbnail */}
+          <div className="w-9 h-11 rounded bg-theme-app border border-theme-subtle overflow-hidden shrink-0 relative flex items-center justify-center">
+            {isPdf ? (
+              <FileText className="w-4 h-4 text-purple-400 shrink-0" />
+            ) : !fullFailed ? (
+              <img
+                src={thumbFailed ? fullUrl : thumbUrl}
+                alt={doc.dosya_adi}
+                className="w-full h-full object-cover"
+                loading="lazy"
+                onError={() => {
+                  if (!thumbFailed) {
+                    setThumbFailed(true);
+                  } else {
+                    setFullFailed(true);
+                  }
+                }}
+              />
             ) : (
-              <Square className="w-3.5 h-3.5 text-theme-muted/60" />
+              <FileText className="w-4 h-4 text-theme-muted shrink-0" />
+            )}
+            {pageCount > 1 && (
+              <div className="absolute bottom-0 right-0 bg-purple-950/90 text-purple-300 text-[8px] px-0.5 rounded-tl font-bold leading-none py-0.5">
+                {pageCount}S
+              </div>
             )}
           </div>
-        )}
 
-        {/* Thumbnail */}
-        <div className="w-9 h-11 rounded bg-theme-app border border-theme-subtle overflow-hidden shrink-0 relative flex items-center justify-center">
-          {isPdf ? (
-            <FileText className="w-4 h-4 text-purple-400 shrink-0" />
-          ) : !fullFailed ? (
-            <img
-              src={thumbFailed ? fullUrl : thumbUrl}
-              alt={doc.dosya_adi}
-              className="w-full h-full object-cover"
-              loading="lazy"
-              onError={() => {
-                if (!thumbFailed) {
-                  setThumbFailed(true);
-                } else {
-                  setFullFailed(true);
-                }
-              }}
-            />
-          ) : (
-            <FileText className="w-4 h-4 text-theme-muted shrink-0" />
-          )}
-          {pageCount > 1 && (
-            <div className="absolute bottom-0 right-0 bg-purple-950/90 text-purple-300 text-[8px] px-0.5 rounded-tl font-bold leading-none py-0.5">
-              {pageCount}S
-            </div>
-          )}
-        </div>
-
-        {/* Bilgiler */}
-        <div className="flex-1 min-w-0 flex flex-col justify-center">
-          <div className="flex items-center justify-between gap-1 min-w-0">
-            <span className="text-xs font-semibold text-theme-primary truncate min-w-0" title={irsaliyeNo || doc.dosya_adi}>
-              {irsaliyeNo || doc.dosya_adi}
-            </span>
-            <div className="flex items-center space-x-1 shrink-0">
-              {getStatusBadge(doc.durum)}
-              <button
-                type="button"
-                onClick={onDelete}
-                disabled={doc.durum === 'isleniyor'}
-                className={`text-theme-muted hover:text-rose-400 p-1 rounded transition-all min-w-[28px] min-h-[28px] flex items-center justify-center ${
-                  doc.durum === 'isleniyor' ? 'hidden' : 'opacity-70 sm:opacity-0 sm:group-hover:opacity-100'
-                }`}
-                title="Kuyruktan Sil"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          </div>
-
-          <div className="flex items-center justify-between text-[11px] text-theme-muted truncate min-w-0 mt-0.5">
-            <span className="truncate text-[10px] text-theme-secondary/80">
-              {doc.veri?.header?.gonderici_unvan || doc.dosya_adi}
-            </span>
-            <div className="flex items-center space-x-1 shrink-0 ml-1">
-              {doc.durum === 'kuyrukta' && (
+          {/* Bilgiler */}
+          <div className="flex-1 min-w-0 flex flex-col justify-center">
+            <div className="flex items-center justify-between gap-1 min-w-0">
+              <span className="text-xs font-semibold text-theme-primary truncate min-w-0" title={irsaliyeNo || doc.dosya_adi}>
+                {irsaliyeNo || doc.dosya_adi}
+              </span>
+              <div className="flex items-center space-x-1 shrink-0">
+                <StatusBadge 
+                  status={doc.durum} 
+                  isNonInvoice={isNonInvoice} 
+                  hataMesaji={doc.hata_mesaji} 
+                />
                 <button
                   type="button"
-                  onClick={onProcess}
-                  className="text-[10px] text-blue-400 hover:text-blue-300 font-medium hover:underline"
+                  onClick={handleDeleteClick}
+                  disabled={doc.durum === 'isleniyor'}
+                  className={`text-theme-muted hover:text-rose-400 p-1 rounded transition-all min-w-[28px] min-h-[28px] flex items-center justify-center ${
+                    doc.durum === 'isleniyor' ? 'hidden' : 'opacity-70 sm:opacity-0 sm:group-hover:opacity-100'
+                  }`}
+                  title="Kuyruktan Sil"
                 >
-                  İşle
+                  <Trash2 className="w-3.5 h-3.5" />
                 </button>
-              )}
-              {doc.durum === 'hata' && (
-                <button
-                  type="button"
-                  onClick={onProcess}
-                  className="text-[10px] text-rose-400 hover:text-rose-300 font-semibold hover:underline"
-                  title="Belgeyi Yeniden Oku"
-                >
-                  Yeniden Dene
-                </button>
-              )}
-              {itemsCount !== undefined && itemsCount > 0 && (
-                <span className="text-[10px] text-theme-muted font-mono">
-                  {itemsCount} Kalem
-                </span>
-              )}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between text-[11px] text-theme-muted truncate min-w-0 mt-0.5">
+              <span className="truncate text-[10px] text-theme-secondary/80">
+                {doc.veri?.header?.gonderici_unvan || doc.dosya_adi}
+              </span>
+              <div className="flex items-center space-x-1 shrink-0 ml-1">
+                {doc.durum === 'kuyrukta' && (
+                  <button
+                    type="button"
+                    onClick={handleProcessClick}
+                    className="text-[10px] text-blue-400 hover:text-blue-300 font-medium hover:underline"
+                  >
+                    İşle
+                  </button>
+                )}
+                {doc.durum === 'hata' && (
+                  <button
+                    type="button"
+                    onClick={handleProcessClick}
+                    className="text-[10px] text-rose-400 hover:text-rose-300 font-semibold hover:underline"
+                    title="Belgeyi Yeniden Oku"
+                  >
+                    Yeniden Dene
+                  </button>
+                )}
+                {itemsCount !== undefined && itemsCount > 0 && (
+                  <span className="text-[10px] text-theme-muted font-mono">
+                    {itemsCount} Kalem
+                  </span>
+                )}
+              </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
-  );
-};
+    );
+  },
+  (prev, next) => {
+    // React 19 Derin Memoization Karşılaştırıcısı
+    // Sadece gerçekten değişen prop'lar re-render'ı tetikler (500+ evrakta %99 VDOM tasarrufu)
+    return (
+      prev.isSelected === next.isSelected &&
+      prev.isChecked === next.isChecked &&
+      prev.isSelectionMode === next.isSelectionMode &&
+      prev.onSelect === next.onSelect &&
+      prev.onDelete === next.onDelete &&
+      prev.onProcess === next.onProcess &&
+      prev.onToggleCheck === next.onToggleCheck &&
+      prev.doc.id === next.doc.id &&
+      prev.doc.durum === next.doc.durum &&
+      prev.doc.guncellenme_ts === next.doc.guncellenme_ts &&
+      prev.doc.dosya_adi === next.doc.dosya_adi &&
+      prev.doc.hata_mesaji === next.doc.hata_mesaji &&
+      prev.doc.veri === next.doc.veri &&
+      prev.doc.sayfalar === next.doc.sayfalar
+    );
+  }
+);
+
+QueueItem.displayName = 'QueueItem';

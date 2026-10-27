@@ -23,6 +23,7 @@ interface BucketFleetState {
 const COLS = 10;
 const ROWS = 14;
 const TOTAL_TILES = COLS * ROWS; // 140 Mikro-Karo
+const STATIC_TILE_INDICES = Array.from({ length: TOTAL_TILES }, (_, idx) => idx);
 
 /**
  * 10 Sütun x 14 Satır = 140 Mikro-Karo için Salyangoz Kabuğu (Inward Nautilus G-Spiral) Algoritması
@@ -114,7 +115,7 @@ interface TileGridProps {
 const TileGrid = React.memo<TileGridProps>(({ resolvedTiles, bloomingTiles }) => {
   return (
     <>
-      {Array.from({ length: TOTAL_TILES }).map((_, idx) => (
+      {STATIC_TILE_INDICES.map((idx) => (
         <TileItem
           key={idx}
           idx={idx}
@@ -320,12 +321,12 @@ export const ProgressiveTileRender: React.FC<ProgressiveTileRenderProps> = ({
   const animFrameRef = useRef<number | null>(null);
   const currentStepRef = useRef<number>(0);
   const touchdownCounterRef = useRef<number>(1);
-  const timersRef = useRef<number[]>([]);
+  const timersRef = useRef<Set<number>>(new Set());
 
   // Tüm aktif timer'ları temizleme (Memory Leak & Unmount State Update Koruması)
   const clearAllTimers = () => {
     timersRef.current.forEach((t) => clearTimeout(t));
-    timersRef.current = [];
+    timersRef.current.clear();
   };
 
   useEffect(() => {
@@ -436,13 +437,14 @@ export const ProgressiveTileRender: React.FC<ProgressiveTileRenderProps> = ({
 
           // 240ms sonra fosfor difüzyonunu söndür (Timer havuzunda takip edilir)
           const bloomTimer = window.setTimeout(() => {
+            timersRef.current.delete(bloomTimer);
             setBloomingTiles((prev) => {
               const next = new Set(prev);
               newResolved.forEach((t) => next.delete(t));
               return next;
             });
           }, 240);
-          timersRef.current.push(bloomTimer);
+          timersRef.current.add(bloomTimer);
         }
 
         animFrameRef.current = requestAnimationFrame(tick);
@@ -469,13 +471,17 @@ export const ProgressiveTileRender: React.FC<ProgressiveTileRenderProps> = ({
       setResolvedTiles(allTiles);
 
       const finishTimer = window.setTimeout(() => {
+        timersRef.current.delete(finishTimer);
         setIsVisible(false);
         setIsFinishing(false);
         if (onComplete) onComplete();
       }, 340);
-      timersRef.current.push(finishTimer);
+      timersRef.current.add(finishTimer);
 
-      return () => clearTimeout(finishTimer);
+      return () => {
+        clearTimeout(finishTimer);
+        timersRef.current.delete(finishTimer);
+      };
     }
   }, [isActive, isVisible, isFinishing, onComplete]);
 

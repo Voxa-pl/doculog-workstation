@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from .core.config import settings
@@ -14,6 +15,7 @@ app = FastAPI(
 cors_origins = settings.CORS_ORIGINS
 allow_creds = "*" not in cors_origins
 
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
@@ -48,6 +50,7 @@ async def startup_event():
                 stale_count += 1
         if stale_count > 0:
             print(f"[Startup Stale Cleaner] {stale_count} adet zombi evrak kurtarıldı.")
+        doc_repo.warmup_cache()
     except Exception as stale_err:
         print(f"[Startup Stale Cleaner Hata]: {stale_err}")
 

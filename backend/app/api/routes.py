@@ -7,7 +7,7 @@ from typing import List, Dict, Optional, Tuple
 from datetime import datetime
 import asyncio
 from fastapi import APIRouter, UploadFile, File, Form, WebSocket, WebSocketDisconnect, HTTPException, BackgroundTasks
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 
 from ..core.config import settings
@@ -61,12 +61,29 @@ async def health_check():
         "motor": "Waybill OCR Engine v1.0"
     }
 
+@router.get("/system/status")
+async def system_status():
+    return {
+        "sistem": settings.PROJECT_NAME,
+        "versiyon": settings.VERSION,
+        "durum": "calisiyor",
+        "motor": "Waybill OCR Engine v1.0"
+    }
+
+@router.get("/documents/summary", response_model=BatchSummary)
+async def get_documents_summary():
+    """Tüm kuyruk ve işleme durum özetini mikro-saniyeler içinde önbellekten döner."""
+    cached_json = doc_repo.get_cached_summary_json()
+    if cached_json:
+        return Response(content=cached_json, media_type="application/json")
+    return doc_repo.get_summary()
+
+from .endpoints.documents import list_documents as endpoint_list_documents
+
 @router.get("/documents", response_model=QueueResponse)
 async def list_documents():
-    return QueueResponse(
-        documents=doc_repo.get_all(),
-        summary=doc_repo.get_summary()
-    )
+    """Tüm belgeleri ve kuyruk özetini döner. Hafif serializer ve in-memory byte cache ile çalışır."""
+    return await endpoint_list_documents()
 
 MAGIC_BYTES = {
     "jpg": [b"\xff\xd8\xff"],

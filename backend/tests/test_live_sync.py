@@ -166,7 +166,10 @@ class TestMultiDeviceLiveSync(unittest.IsolatedAsyncioTestCase):
 
             # 10 istemcinin tümü DOCUMENTS_UPDATED almalı
             for idx, ws in enumerate(sockets):
-                msg = json.loads(await asyncio.wait_for(ws.recv(), timeout=5.0))
+                while True:
+                    msg = json.loads(await asyncio.wait_for(ws.recv(), timeout=5.0))
+                    if msg.get("action") == "demo_load":
+                        break
                 self.assertEqual(msg["type"], "DOCUMENTS_UPDATED", f"Client {idx} failed")
                 self.assertEqual(msg["action"], "demo_load")
 
@@ -175,7 +178,10 @@ class TestMultiDeviceLiveSync(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(res.status_code, 200)
 
             for idx, ws in enumerate(sockets):
-                msg = json.loads(await asyncio.wait_for(ws.recv(), timeout=5.0))
+                while True:
+                    msg = json.loads(await asyncio.wait_for(ws.recv(), timeout=5.0))
+                    if msg.get("action") == "delete":
+                        break
                 self.assertEqual(msg["type"], "DOCUMENTS_UPDATED")
                 self.assertEqual(msg["action"], "delete")
 

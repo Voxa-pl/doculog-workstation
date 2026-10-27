@@ -62,9 +62,9 @@ class DocumentItem(BaseModel):
     dosya_adi: str
     dosya_yolu: str
     dosya_url: str
-    mime_type: str
-    boyut_bytes: int
-    yuklenme_tarihi: str
+    mime_type: str = "image/jpeg"
+    boyut_bytes: int = 0
+    yuklenme_tarihi: str = ""
     donus_acisi: int = 0
     durum: ProcessingStatus = ProcessingStatus.KUYRUKTA
     hata_mesaji: Optional[str] = None
