@@ -138,12 +138,16 @@ class ErpExporter:
             return "KOLI"
         if "PAL" in u:
             return "PALET"
-        if "KG" in u or "KİLO" in u:
+        if "KG" in u or "KİLO" in u or "KILO" in u:
             return "KG"
         if "TON" in u:
             return "TON"
-        if "MET" in u:
+        if "MET" in u or u == "M":
             return "MT"
+        if "LT" in u or "LİTR" in u or "LITR" in u:
+            return "LT"
+        if "M3" in u or "METREK" in u:
+            return "M3"
         return "ADET"
 
     def _doc_to_erp_dict(self, doc: DocumentItem) -> Dict[str, Any]:

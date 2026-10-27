@@ -196,21 +196,12 @@ class GeminiExtractor:
 
             # Yalnızca Gemini 3.5 ve 3.6 serisi modeller (kullanıcı kısıtı) - En yetkin 3.6-flash öncelikli
             models_to_try = [
-                settings.GEMINI_MODEL,
                 "gemini-3.6-flash",
                 "gemini-3.5-flash",
-                "gemini-3.6-flash-lite",
                 "gemini-3.5-flash-lite",
             ]
-            # Kesin kural: Sadece 3.5 ve 3.6 serisine ait modeller kabul edilir
-            models_to_try = [
-                m for m in dict.fromkeys(models_to_try)
-                if m and ("3.5" in m or "3.6" in m)
-            ]
-            # gemini-3.6-flash'ı en başa al (en yüksek optik ve Türkçe görme performansı)
-            if "gemini-3.6-flash" in models_to_try and models_to_try[0] != "gemini-3.6-flash":
-                models_to_try.remove("gemini-3.6-flash")
-                models_to_try.insert(0, "gemini-3.6-flash")
+            if settings.GEMINI_MODEL and settings.GEMINI_MODEL not in models_to_try and ("3.5" in settings.GEMINI_MODEL or "3.6" in settings.GEMINI_MODEL):
+                models_to_try.append(settings.GEMINI_MODEL)
 
             last_error: Optional[Exception] = None
             output_text: Optional[str] = None
@@ -233,25 +224,28 @@ class GeminiExtractor:
                         last_error = api_err
                         code = getattr(api_err, "code", None)
                         err_msg = str(api_err).lower()
+                        if code == 404:
+                            logger.warning(f"[{model_name}] Model bulunamadı (404), sonraki modele geçiliyor.")
+                            break
                         if code == 429 or "429" in err_msg or "resource_exhausted" in err_msg or "quota" in err_msg:
-                            sleep_time = random.uniform(0.8, 1.8) * (2 ** attempt)
-                            logger.warning(f"[{model_name}] Gemini API kota sınırı (429), {sleep_time:.2f}s bekleniyor (Full Jitter)...")
+                            sleep_time = random.uniform(0.6, 1.4) * (2 ** attempt)
+                            logger.warning(f"[{model_name}] Servis kota sınırı (429), {sleep_time:.2f}s bekleniyor...")
                             time.sleep(sleep_time)
                             continue
                         else:
-                            logger.warning(f"[{model_name}] Gemini APIError ({code}): {api_err}")
+                            logger.warning(f"[{model_name}] Servis Hatası ({code}): {api_err}")
                             break
                     except (httpx.TimeoutException, TimeoutError, socket.timeout) as timeout_err:
                         last_error = timeout_err
-                        logger.warning(f"[{model_name}] Gemini API zaman aşımı (Timeout): {timeout_err}")
+                        logger.warning(f"[{model_name}] Zaman aşımı: {timeout_err}")
                         break
                     except (httpx.NetworkError, ConnectionError, OSError) as net_err:
                         last_error = net_err
-                        logger.warning(f"[{model_name}] Gemini API ağ kopması / bağlantı hatası: {net_err}")
+                        logger.warning(f"[{model_name}] Ağ bağlantı hatası: {net_err}")
                         break
                     except Exception as ex:
                         last_error = ex
-                        logger.warning(f"[{model_name}] Beklenmeyen model hatası: {ex}")
+                        logger.warning(f"[{model_name}] Beklenmeyen ayrıştırma hatası: {ex}")
                         break
 
                 if output_text:
@@ -263,19 +257,19 @@ class GeminiExtractor:
                     code = getattr(last_error, "code", None)
                     if code == 429 or "429" in err_str or "resource_exhausted" in err_str or "quota" in err_str:
                         raise GeminiRateLimitError(
-                            f"Gemini API kota sınırı aşıldı (429 Rate Limit / Quota Exceeded). Lütfen bir süre sonra tekrar deneyin."
+                            "Belge işlem hattında anlık servis yoğunluğu yaşanıyor. Lütfen kısa bir süre sonra tekrar deneyiniz."
                         )
                     elif isinstance(last_error, (httpx.TimeoutException, TimeoutError, socket.timeout)) or "timeout" in err_str:
                         raise GeminiTimeoutError(
-                            f"Gemini API sunucusundan yanıt zaman aşımına uğradı (Timeout 30s). Ağ durumunu kontrol edin."
+                            "Belge çözümleme servisi zaman aşımına uğradı. Ağ durumunu kontrol edip tekrar deneyiniz."
                         )
                     elif isinstance(last_error, (httpx.NetworkError, ConnectionError, OSError)) or "connection" in err_str:
                         raise GeminiNetworkError(
-                            f"Gemini API sunucusuna ulaşılamadı (Network Error / Ağ Kopması). İnternet bağlantınızı kontrol edin."
+                            "Doğrulama ve aktarım servisine ulaşılamadı. Lütfen ağ bağlantınızı kontrol ediniz."
                         )
                     else:
-                        raise RuntimeError(f"Gemini API çağrı hatası: {last_error}")
-                raise RuntimeError("Yapay zeka modelinden herhangi bir metin yanıtı alınamadı.")
+                        raise RuntimeError(f"Evrak ayrıştırma servisi hatası: {last_error}")
+                raise RuntimeError("Belge ayrıştırma servisinden yanıt alınamadı. Lütfen görsel kalitesini kontrol ediniz.")
 
             # Markdown kod bloklarını (```json ... ```) temizle
             clean_text = output_text.strip()

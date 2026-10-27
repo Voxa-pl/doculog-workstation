@@ -427,6 +427,14 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
     handleApproveAndNext(discrepancyWarning);
   };
 
+  const handleSyncTotalWithItems = () => {
+    hasUnsavedChangesRef.current = true;
+    setHasUnsavedChanges(true);
+    setFormData((prev) => (prev ? { ...prev, genel_toplam_miktar: totalCalculatedQty } : null));
+    discrepancyWarningRef.current = false;
+    setDiscrepancyWarning(false);
+  };
+
   const handleOpenPoReconcile = async () => {
     if (!document) return;
     setIsLoadingPo(true);
@@ -715,7 +723,16 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
               </p>
             </div>
           </div>
-          <div className="flex items-center justify-end space-x-2 pt-1 border-t border-amber-500/20">
+          <div className="flex flex-wrap items-center justify-end gap-2 pt-1 border-t border-amber-500/20">
+            <button
+              type="button"
+              onClick={handleSyncTotalWithItems}
+              className="px-2.5 py-1 text-[11px] rounded bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 font-bold transition-all border border-emerald-500/30 flex items-center space-x-1"
+              title="İrsaliye dip toplamını kalemler toplamına eşitler"
+            >
+              <Check className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Dip Toplamı Eşitle ({totalCalculatedQty.toLocaleString('tr-TR')} Adet)</span>
+            </button>
             <button
               type="button"
               onClick={() => {

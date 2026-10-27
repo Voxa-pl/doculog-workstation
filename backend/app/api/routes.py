@@ -360,24 +360,24 @@ def _run_ai_extraction(doc_id: str):
         doc.hata_mesaji = None
     except GeminiRateLimitError as rle:
         doc.durum = ProcessingStatus.HATA
-        doc.hata_mesaji = f"Kota Sınırı (429 Rate Limit): {rle}"
-        print(f"[Gemini KOTA AŞIMI] Belge {doc_id}: {rle}")
+        doc.hata_mesaji = "Kota Sınırı (429 Rate Limit): Belge işlem hattında anlık yoğunluk yaşanıyor. Lütfen kısa bir süre sonra tekrar deneyiniz."
+        print(f"[KOTA AŞIMI] Belge {doc_id}: {rle}")
     except GeminiTimeoutError as te:
         doc.durum = ProcessingStatus.HATA
-        doc.hata_mesaji = f"Zaman Aşımı (Timeout): {te}"
-        print(f"[Gemini ZAMAN AŞIMI] Belge {doc_id}: {te}")
+        doc.hata_mesaji = "Zaman Aşımı (Timeout): Belge çözümleme servisi zaman aşımına uğradı. Ağ durumunu kontrol edip tekrar deneyiniz."
+        print(f"[ZAMAN AŞIMI] Belge {doc_id}: {te}")
     except GeminiNetworkError as ne:
         doc.durum = ProcessingStatus.HATA
-        doc.hata_mesaji = f"Ağ Bağlantı Kopması: {ne}"
-        print(f"[Gemini AĞ HATASI] Belge {doc_id}: {ne}")
+        doc.hata_mesaji = "Ağ Bağlantı Kopması: Doğrulama ve aktarım servisine ulaşılamadı. Lütfen ağ erişimini kontrol ediniz."
+        print(f"[AĞ HATASI] Belge {doc_id}: {ne}")
     except GeminiExtractionError as ee:
         doc.durum = ProcessingStatus.HATA
-        doc.hata_mesaji = f"Ayrıştırma / Format Hatası: {ee}"
-        print(f"[Gemini FORMAT HATASI] Belge {doc_id}: {ee}")
+        doc.hata_mesaji = "Belge Ayrıştırma Uyarısı: Evrak üzerindeki alanlar net olarak çözümlenemedi. Lütfen net bir görsel yükleyiniz."
+        print(f"[FORMAT HATASI] Belge {doc_id}: {ee}")
     except Exception as e:
         doc.durum = ProcessingStatus.HATA
-        doc.hata_mesaji = str(e)
-        print(f"[Gemini GENEL HATA] Belge {doc_id}: {e}")
+        doc.hata_mesaji = "İşlem Hatası: Evrak işlenirken bir sorun oluştu. Lütfen tekrar deneyiniz."
+        print(f"[GENEL HATA] Belge {doc_id}: {e}")
 
     # Hayalet Evrak Koruması: İşlem sürerken kullanıcı evrakı silmişse diriltme!
     current_doc = doc_repo.get_by_id(doc_id)
@@ -467,7 +467,7 @@ async def _run_batch_worker(doc_ids: List[str]):
                 err_doc = doc_repo.get_by_id(doc_id)
                 if err_doc:
                     err_doc.durum = ProcessingStatus.HATA
-                    err_doc.hata_mesaji = f"İşlem hatası: {str(item_err)}"
+                    err_doc.hata_mesaji = "İşlem Hatası: Evrak işlenirken bir sorun oluştu. Lütfen tekrar deneyiniz."
                     doc_repo.save(err_doc, create_if_missing=False)
             finally:
                 task_queue.task_done()

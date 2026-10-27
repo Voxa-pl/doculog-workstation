@@ -110,6 +110,7 @@ class QueueManager:
                         and (
                             "429" in last_doc.hata_mesaji
                             or "kota" in last_doc.hata_mesaji.lower()
+                            or "yoğunluk" in last_doc.hata_mesaji.lower()
                             or "503" in last_doc.hata_mesaji
                             or "504" in last_doc.hata_mesaji
                             or "overloaded" in last_doc.hata_mesaji.lower()
