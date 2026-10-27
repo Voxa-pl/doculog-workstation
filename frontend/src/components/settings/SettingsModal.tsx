@@ -405,11 +405,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     >
       <div
         ref={modalRef}
-        className="bg-theme-surface border border-theme-subtle rounded-2xl w-full max-w-4xl h-[620px] max-h-[92vh] shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150 min-w-0 craft-card"
+        className="bg-theme-surface border border-theme-subtle rounded-none sm:rounded-2xl w-full max-w-4xl h-full sm:h-[620px] max-h-screen sm:max-h-[92vh] shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150 min-w-0 craft-card"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Üst Başlık (Header Bar) */}
-        <div className="px-6 py-4 border-b border-theme-subtle flex items-center justify-between bg-theme-surface/90 backdrop-blur-sm shrink-0 min-w-0">
+        <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-theme-subtle flex items-center justify-between bg-theme-surface/90 backdrop-blur-sm shrink-0 min-w-0">
           <div className="flex items-center space-x-3 min-w-0">
             <div className="w-9 h-9 rounded-xl bg-blue-500/10 border border-blue-500/25 flex items-center justify-center text-blue-400 shrink-0 shadow-sm">
               <Settings className="w-5 h-5" />
@@ -420,14 +420,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   id="settings-modal-title"
                   className="text-sm sm:text-base font-semibold text-theme-primary truncate tracking-tight"
                 >
-                  Ayarlar Merkezi
+                  Ayarlar
                 </h2>
                 <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20 font-semibold tracking-wider">
                   Kurumsal
                 </span>
               </div>
-              <p className="text-xs text-theme-muted truncate">
-                DocuLog Lojistik İstasyonu • Görünüm, AI ve Entegrasyon Yapılandırması
+              <p className="text-xs text-theme-muted truncate hidden sm:block">
+                DocuLog Lojistik İstasyonu • Sistem, Görünüm ve Entegrasyon Yapılandırması
               </p>
             </div>
           </div>
@@ -438,30 +438,30 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </kbd>
             <button
               onClick={onClose}
-              className="text-theme-muted hover:text-theme-primary p-2 rounded-xl hover:bg-theme-card transition-colors shrink-0"
+              className="text-theme-muted hover:text-theme-primary p-2 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-xl hover:bg-theme-card transition-colors shrink-0"
               title="Kapat (Escape)"
               aria-label="Kapat"
             >
-              <X className="w-4 h-4" />
+              <X className="w-5 h-5" />
             </button>
           </div>
         </div>
 
-        {/* Modal Ana Gövde (Sidebar Tabs + Scrollable Viewport) */}
-        <div className="flex flex-1 min-h-0 overflow-hidden">
-          {/* Sol Dikey Sekme Menüsü (Vertical Tab Sidebar) */}
+        {/* Modal Ana Gövde (Sidebar Tabs + Scrollable Viewport - Mobilde Dikey Yığın, Masaüstünde Çift Sütun) */}
+        <div className="flex flex-col md:flex-row flex-1 min-h-0 overflow-hidden">
+          {/* Sekme Menüsü: Mobilde Yatay Kaydırılabilir Şerit (no-scrollbar), Masaüstünde Dikey w-60/64 Sidebar */}
           <nav
-            className="w-56 sm:w-64 border-r border-theme-subtle bg-theme-card/30 flex flex-col justify-between shrink-0 p-3 overflow-y-auto"
+            className="w-full md:w-60 lg:w-64 border-b md:border-b-0 md:border-r border-theme-subtle bg-theme-card/30 flex flex-row md:flex-col justify-between shrink-0 p-2 sm:p-3 overflow-x-auto md:overflow-y-auto no-scrollbar gap-1.5"
             aria-label="Ayarlar sekmeleri"
           >
-            <div className="space-y-1.5">
+            <div className="flex flex-row md:flex-col gap-1.5 w-auto md:w-full shrink-0">
               {/* Sekme 1: Görünüm & Çalışma Alanı */}
               <button
                 type="button"
                 onClick={() => setActiveTab('gorunum')}
-                className={`w-full flex items-center space-x-3 px-3.5 py-3 rounded-xl text-left transition-all text-xs font-medium ${
+                className={`flex items-center space-x-2 md:space-x-3 px-3 md:px-3.5 py-2 md:py-3 rounded-xl text-left transition-all text-xs font-medium whitespace-nowrap min-h-[44px] shrink-0 md:w-full ${
                   activeTab === 'gorunum'
-                    ? 'bg-blue-600/15 text-blue-400 border border-blue-500/30 shadow-xs'
+                    ? 'bg-blue-600/15 text-blue-400 border border-blue-500/30 shadow-xs font-semibold'
                     : 'text-theme-secondary hover:text-theme-primary hover:bg-theme-card/60 border border-transparent'
                 }`}
               >
@@ -475,8 +475,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <Layout className="w-4 h-4" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="font-semibold truncate">Görünüm & Düzen</div>
-                  <div className="text-[10px] text-theme-muted truncate">
+                  <div className="truncate">Görünüm & Düzen</div>
+                  <div className="text-[10px] text-theme-muted truncate hidden md:block">
                     3 Sütun, Mini Ray, Temalar
                   </div>
                 </div>
@@ -486,9 +486,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <button
                 type="button"
                 onClick={() => setActiveTab('ai')}
-                className={`w-full flex items-center space-x-3 px-3.5 py-3 rounded-xl text-left transition-all text-xs font-medium ${
+                className={`flex items-center space-x-2 md:space-x-3 px-3 md:px-3.5 py-2 md:py-3 rounded-xl text-left transition-all text-xs font-medium whitespace-nowrap min-h-[44px] shrink-0 md:w-full ${
                   activeTab === 'ai'
-                    ? 'bg-blue-600/15 text-blue-400 border border-blue-500/30 shadow-xs'
+                    ? 'bg-blue-600/15 text-blue-400 border border-blue-500/30 shadow-xs font-semibold'
                     : 'text-theme-secondary hover:text-theme-primary hover:bg-theme-card/60 border border-transparent'
                 }`}
               >
@@ -502,14 +502,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <Key className="w-4 h-4" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="font-semibold truncate">Servis Bağlantısı</div>
-                  <div className="text-[10px] text-theme-muted truncate">
+                  <div className="truncate">Servis Bağlantısı</div>
+                  <div className="text-[10px] text-theme-muted truncate hidden md:block">
                     Belge Okuma ve Lisans
                   </div>
                 </div>
                 {apiKeyStatus?.is_configured && (
                   <span
-                    className="w-2 h-2 rounded-full bg-emerald-400 shrink-0"
+                    className="w-2 h-2 rounded-full bg-emerald-400 shrink-0 ml-1"
                     title="Servis Anahtarı Tanımlı"
                   />
                 )}
@@ -519,9 +519,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <button
                 type="button"
                 onClick={() => setActiveTab('veri')}
-                className={`w-full flex items-center space-x-3 px-3.5 py-3 rounded-xl text-left transition-all text-xs font-medium ${
+                className={`flex items-center space-x-2 md:space-x-3 px-3 md:px-3.5 py-2 md:py-3 rounded-xl text-left transition-all text-xs font-medium whitespace-nowrap min-h-[44px] shrink-0 md:w-full ${
                   activeTab === 'veri'
-                    ? 'bg-blue-600/15 text-blue-400 border border-blue-500/30 shadow-xs'
+                    ? 'bg-blue-600/15 text-blue-400 border border-blue-500/30 shadow-xs font-semibold'
                     : 'text-theme-secondary hover:text-theme-primary hover:bg-theme-card/60 border border-transparent'
                 }`}
               >
@@ -535,8 +535,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <Database className="w-4 h-4" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="font-semibold truncate">Veri & Bakım</div>
-                  <div className="text-[10px] text-theme-muted truncate">
+                  <div className="truncate">Veri & Bakım</div>
+                  <div className="text-[10px] text-theme-muted truncate hidden md:block">
                     Kuyruk Sıfırla, Yedek (.tar.gz)
                   </div>
                 </div>
@@ -546,9 +546,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <button
                 type="button"
                 onClick={() => setActiveTab('cihazlar')}
-                className={`w-full flex items-center space-x-3 px-3.5 py-3 rounded-xl text-left transition-all text-xs font-medium ${
+                className={`flex items-center space-x-2 md:space-x-3 px-3 md:px-3.5 py-2 md:py-3 rounded-xl text-left transition-all text-xs font-medium whitespace-nowrap min-h-[44px] shrink-0 md:w-full ${
                   activeTab === 'cihazlar'
-                    ? 'bg-blue-600/15 text-blue-400 border border-blue-500/30 shadow-xs'
+                    ? 'bg-blue-600/15 text-blue-400 border border-blue-500/30 shadow-xs font-semibold'
                     : 'text-theme-secondary hover:text-theme-primary hover:bg-theme-card/60 border border-transparent'
                 }`}
               >
@@ -562,16 +562,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <QrCode className="w-4 h-4" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="font-semibold truncate">Cihazlar & Köprü</div>
-                  <div className="text-[10px] text-theme-muted truncate">
+                  <div className="truncate">Cihazlar & Köprü</div>
+                  <div className="text-[10px] text-theme-muted truncate hidden md:block">
                     Mobil QR & ERP Formatları
                   </div>
                 </div>
               </button>
             </div>
 
-            {/* Alt Sistem Bilgisi Rozeti */}
-            <div className="p-3 bg-theme-card/40 border border-theme-subtle rounded-xl text-[11px] text-theme-muted space-y-1">
+            {/* Alt Sistem Bilgisi Rozeti (Yalnızca Masaüstünde) */}
+            <div className="hidden md:block p-3 bg-theme-card/40 border border-theme-subtle rounded-xl text-[11px] text-theme-muted space-y-1">
               <div className="flex items-center justify-between text-theme-secondary font-medium">
                 <span>DocuLog İstasyonu</span>
                 <span className="font-mono text-[10px]">v1.0.4</span>
@@ -582,8 +582,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
           </nav>
 
-          {/* Sağ İçerik Alanı (Tab Panel Viewport - Fixed Size, Zero Reflow) */}
-          <main className="flex-1 min-w-0 overflow-y-auto p-5 sm:p-6 bg-theme-surface">
+          {/* Sağ İçerik Alanı: Artık mobilde tam genişlik (%100 width, sıfır ezilme) */}
+          <main className="flex-1 min-w-0 overflow-y-auto p-4 sm:p-6 bg-theme-surface overscroll-contain">
             {/* ========================================================= */}
             {/* SEKME 1: GÖRÜNÜM & ÇALIŞMA ALANI */}
             {/* ========================================================= */}

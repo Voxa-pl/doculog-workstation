@@ -524,7 +524,7 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
         {/* Sağ: Aksiyon Butonları & Konsolide İşlemler Menüsü */}
         <div className="flex items-center space-x-1.5 shrink-0">
           {/* Masaüstü Birincil CTA (Onayla veya Reddet) */}
-          <div className="hidden md:flex items-center space-x-1.5">
+          <div className="hidden lg:flex items-center space-x-1.5">
             {isNonInvoice ? (
               onDeleteDoc && (
                 <button
@@ -582,7 +582,7 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
             <button
               type="button"
               onClick={() => setIsMobileActionSheetOpen(true)}
-              className="flex md:hidden items-center space-x-1 h-[30px] px-2 rounded-md bg-theme-card hover:bg-theme-card-hover text-theme-secondary hover:text-theme-primary text-xs font-semibold border border-theme-subtle shadow-xs active:scale-95 transition-all"
+              className="flex lg:hidden items-center space-x-1 h-[34px] px-2.5 rounded-lg bg-theme-card hover:bg-theme-card-hover text-theme-secondary hover:text-theme-primary text-xs font-semibold border border-theme-subtle shadow-xs active:scale-95 transition-all"
             >
               <MoreHorizontal className="w-4 h-4 text-blue-400" />
               <span>İşlemler</span>
@@ -592,7 +592,7 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
             <button
               type="button"
               onClick={() => setIsActionsMenuOpen((p) => !p)}
-              className="hidden md:flex items-center space-x-1 h-[30px] px-2.5 rounded-md bg-theme-card hover:bg-theme-card-hover text-theme-secondary hover:text-theme-primary text-xs font-semibold border border-theme-subtle shadow-xs active:scale-95 transition-all"
+              className="hidden lg:flex items-center space-x-1 h-[30px] px-2.5 rounded-md bg-theme-card hover:bg-theme-card-hover text-theme-secondary hover:text-theme-primary text-xs font-semibold border border-theme-subtle shadow-xs active:scale-95 transition-all"
               title="Tüm ERP, U-ETDS ve Dışa Aktarma İşlemleri"
             >
               <MoreHorizontal className="w-4 h-4 text-blue-400" />
@@ -602,7 +602,7 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
 
             {/* Masaüstü Açılır Menü */}
             {isActionsMenuOpen && (
-              <div className="hidden md:block absolute right-0 top-full mt-1.5 w-60 bg-theme-surface border border-theme-subtle rounded-xl shadow-2xl z-40 p-1.5 space-y-0.5 text-xs">
+              <div className="hidden lg:block absolute right-0 top-full mt-1.5 w-60 bg-theme-surface border border-theme-subtle rounded-xl shadow-2xl z-40 p-1.5 space-y-0.5 text-xs">
                 {!isNonInvoice && erpLintData && (
                   <button
                     type="button"
@@ -817,7 +817,7 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
               <button
                 type="button"
                 onClick={() => setActiveTab('all')}
-                className={`hidden md:flex h-full items-center space-x-1.5 px-2.5 text-xs font-semibold border-b-2 transition-all ${
+                className={`hidden lg:flex h-full items-center space-x-1.5 px-2.5 text-xs font-semibold border-b-2 transition-all ${
                   activeTab === 'all'
                     ? 'border-blue-500 text-blue-400 bg-theme-card/30'
                     : 'border-transparent text-theme-muted hover:text-theme-primary'
@@ -862,7 +862,7 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
           </div>
 
           {/* Form Gövdesi (Scroll Area) */}
-          <div className="flex-1 overflow-y-auto p-3 sm:p-4 pb-20 md:pb-4 space-y-4 custom-scrollbar overscroll-contain">
+          <div className="flex-1 overflow-y-auto p-3 sm:p-4 pb-28 lg:pb-4 space-y-4 custom-scrollbar overscroll-contain">
             {/* Kalemler Görünümü (Mobilde Öncelikli) */}
             {(activeTab === 'all' || activeTab === 'items') && (
               <div className="space-y-4 tab-pane-enter" data-tab-section="items">
@@ -912,7 +912,7 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
           {/* =========================================================================
               3. MOBİL İÇİN YAPIŞKAN ONAY ÇUBUĞU (Sticky Bottom Thumb Approval Bar)
               ========================================================================= */}
-          <div className="md:hidden absolute bottom-0 left-0 right-0 p-2.5 bg-theme-surface/95 backdrop-blur-md border-t border-theme-subtle z-20 flex items-center justify-between gap-2.5 shadow-2xl">
+          <div className="lg:hidden absolute bottom-0 left-0 right-0 p-2.5 pb-safe bg-theme-surface/95 backdrop-blur-md border-t border-theme-subtle z-20 flex items-center justify-between gap-2.5 shadow-2xl">
             <div className="flex flex-col min-w-0 pr-1 select-none">
               <span className="text-[10px] text-theme-muted uppercase font-semibold tracking-wider">
                 {formData.kalemler?.length || 0} Kalem Toplam

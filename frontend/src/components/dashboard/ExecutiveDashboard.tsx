@@ -477,7 +477,7 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
                   <th className="py-2.5 px-3 font-semibold text-center">Kalem</th>
                   <th className="py-2.5 px-3 font-semibold text-right">Toplam Miktar</th>
                   <th className="py-2.5 px-3 font-semibold text-center">Durum</th>
-                  <th className="py-2.5 px-3 font-semibold text-center">AI Güven</th>
+                  <th className="py-2.5 px-3 font-semibold text-center">Doğruluk Skoru</th>
                   <th className="py-2.5 px-3 font-semibold text-right">İşlem</th>
                 </tr>
               </thead>

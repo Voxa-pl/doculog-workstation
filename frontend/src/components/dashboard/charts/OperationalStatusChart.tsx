@@ -269,7 +269,7 @@ export const OperationalStatusChart: React.FC<OperationalStatusChartProps> = ({
             {guvenSkoru !== undefined && (
               <div className="flex items-center space-x-1.5 text-theme-secondary min-w-0">
                 <ShieldCheck className="w-3.5 h-3.5 text-blue-500 shrink-0" />
-                <span className="truncate">AI Güven:</span>
+                <span className="truncate">Doğruluk Skoru:</span>
                 <span className="font-bold text-blue-500 font-mono">
                   %{(guvenSkoru * 100).toFixed(0)}
                 </span>

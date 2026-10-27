@@ -93,10 +93,23 @@
     background: var(--border-strong);
   }
 
+  html, body {
+    overscroll-behavior-y: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
   body {
     background-color: var(--bg-app);
     color: var(--text-primary);
   }
+}
+
+/* Safe Area Inset Destekleri (iOS Notch ve Home Bar Uyumlu) */
+.pb-safe {
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+}
+.pt-safe {
+  padding-top: max(0.5rem, env(safe-area-inset-top));
 }
 
 /* Theme Utilities */

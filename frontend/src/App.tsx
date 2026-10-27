@@ -543,9 +543,9 @@ export const App: React.FC = () => {
             </ErrorBoundary>
           </div>
 
-          {/* Desktop Mod 1: Klasik Sabit 3 Sütun */}
+          {/* Desktop Mod 1: Klasik Sabit 3 Sütun (lg ve üzeri ekranlar) */}
           {layoutMode === 'three-column' && (
-            <div className="hidden md:flex h-full min-w-0 w-64 lg:w-72 shrink-0 overflow-hidden border-r border-theme-subtle">
+            <div className="hidden lg:flex h-full min-w-0 w-64 xl:w-72 shrink-0 overflow-hidden border-r border-theme-subtle">
               <ErrorBoundary panelName="Evrak Kuyruğu" onReset={fetchDocuments}>
                 <BatchQueue
                   documents={documents}
@@ -567,7 +567,7 @@ export const App: React.FC = () => {
           {layoutMode === 'collapsible-dock' && (
             <>
               {/* 48px Sabit Mini Ray */}
-              <div className="hidden md:flex h-full shrink-0">
+              <div className="hidden lg:flex h-full shrink-0">
                 <CollapsibleDockRail
                   totalDocs={documents.length}
                   summary={summary}
@@ -580,7 +580,7 @@ export const App: React.FC = () => {
               {/* Arka Plan Cam Katmanı (Çekmece Açıkken) */}
               <div
                 onClick={() => setIsQueuePeeking(false)}
-                className={`hidden md:block fixed inset-0 z-30 bg-black/20 backdrop-blur-[1px] peek-drawer-backdrop ${
+                className={`hidden lg:block fixed inset-0 z-30 bg-black/20 backdrop-blur-[1px] peek-drawer-backdrop ${
                   isQueuePeeking ? 'is-active' : ''
                 }`}
               />
@@ -589,7 +589,7 @@ export const App: React.FC = () => {
               <div
                 onMouseEnter={handleCancelPeekClose}
                 onMouseLeave={handleSchedulePeekClose}
-                className={`hidden md:flex absolute top-0 bottom-0 left-12 w-72 lg:w-80 z-40 bg-theme-surface/95 backdrop-blur-md border-r border-theme-strong shadow-2xl flex-col peek-drawer-panel ${
+                className={`hidden lg:flex absolute top-0 bottom-0 left-12 w-72 lg:w-80 z-40 bg-theme-surface/95 backdrop-blur-md border-r border-theme-strong shadow-2xl flex-col peek-drawer-panel ${
                   isQueuePeeking ? 'is-open' : ''
                 }`}
                 style={{
@@ -653,15 +653,15 @@ export const App: React.FC = () => {
             </>
           )}
 
-          {/* 2. Sütun: Önizleme / Viewer (Desktop: Esnek dengeli orta sütun | Mobil: 'viewer' sekmesinde tam ekran) */}
-          <div className={`h-full min-w-0 w-full overflow-hidden ${mobileTab === 'viewer' ? 'flex flex-1' : 'hidden'} md:flex md:flex-1 relative`}>
+          {/* 2. Sütun: Önizleme / Viewer (Desktop: Esnek dengeli orta sütun | Mobil/Tablet: 'viewer' sekmesinde tam ekran) */}
+          <div className={`h-full min-w-0 w-full overflow-hidden ${mobileTab === 'viewer' ? 'flex flex-1' : 'hidden'} lg:flex lg:flex-1 relative`}>
             {/* Desktop Mod 3 (Süper Odak): Kuyruğu Açma Yüzer Butonu */}
             {layoutMode === 'focus-studio' && (
               <button
                 type="button"
                 onClick={() => setLayoutMode('collapsible-dock')}
                 title="Kuyruğu Aç (Kısayol: [ )"
-                className="absolute top-2.5 left-2.5 z-20 hidden md:flex items-center space-x-1.5 px-2.5 py-1 rounded-lg bg-theme-surface/90 hover:bg-theme-card text-theme-secondary hover:text-theme-primary border border-theme-subtle shadow-md backdrop-blur-sm text-xs font-medium transition-all group active:scale-95"
+                className="absolute top-2.5 left-2.5 z-20 hidden lg:flex items-center space-x-1.5 px-2.5 py-1 rounded-lg bg-theme-surface/90 hover:bg-theme-card text-theme-secondary hover:text-theme-primary border border-theme-subtle shadow-md backdrop-blur-sm text-xs font-medium transition-all group active:scale-95"
               >
                 <Sidebar className="w-3.5 h-3.5 text-blue-400 group-hover:scale-110 transition-transform" />
                 <span>Kuyruk</span>
@@ -680,8 +680,8 @@ export const App: React.FC = () => {
             </ErrorBoundary>
           </div>
 
-          {/* 3. Sütun: Düzenleme Formu / Editor (Desktop: Ferah ve dikey uyumlu sağ sütun | Mobil: 'editor' sekmesinde tam ekran) */}
-          <div className={`h-full min-w-0 w-full md:w-[440px] lg:w-[480px] xl:w-[540px] 2xl:w-[580px] shrink-0 overflow-hidden ${mobileTab === 'editor' ? 'flex flex-1' : 'hidden'} md:flex border-l border-theme-subtle`}>
+          {/* 3. Sütun: Düzenleme Formu / Editor (Desktop: Ferah sağ sütun | Mobil/Tablet: 'editor' sekmesinde tam ekran) */}
+          <div className={`h-full min-w-0 w-full lg:w-[440px] xl:w-[480px] 2xl:w-[540px] shrink-0 overflow-hidden ${mobileTab === 'editor' ? 'flex flex-1' : 'hidden'} lg:flex border-l border-theme-subtle`}>
             <ErrorBoundary panelName="Doğrulama ve Düzenleme Formu">
               <DocumentEditor
                 document={selectedDoc}
@@ -721,15 +721,15 @@ export const App: React.FC = () => {
         )}
       </div>
 
-      {/* Mobil Alt Gezinme Çubuğu (Bottom Navigation Bar) - Sadece İstasyon Aktifken */}
+      {/* Mobil ve Tablet Alt Gezinme Çubuğu (Bottom Navigation Bar) - lg altında aktif, iOS Safe Area uyumlu */}
       {activeView === 'station' && (
-        <div className="flex md:hidden h-14 bg-theme-surface border-t border-theme-subtle items-center justify-around px-2 shrink-0 z-30 shadow-lg">
+        <div className="flex lg:hidden min-h-[56px] pb-safe bg-theme-surface border-t border-theme-subtle items-center justify-around px-2 shrink-0 z-30 shadow-lg">
           <button
             type="button"
             onClick={() => setMobileTab('queue')}
-            className={`flex flex-col items-center justify-center py-1 px-3 min-h-[44px] min-w-[70px] rounded-lg transition-all active:scale-95 ${
+            className={`flex flex-col items-center justify-center py-1.5 px-3 min-h-[44px] min-w-[72px] rounded-xl transition-all active:scale-95 ${
               mobileTab === 'queue'
-                ? 'text-blue-500 font-bold'
+                ? 'text-blue-500 font-bold bg-blue-500/10'
                 : 'text-theme-muted hover:text-theme-primary'
             }`}
           >
@@ -747,9 +747,9 @@ export const App: React.FC = () => {
           <button
             type="button"
             onClick={() => setMobileTab('viewer')}
-            className={`flex flex-col items-center justify-center py-1 px-3 min-h-[44px] min-w-[70px] rounded-lg transition-all active:scale-95 ${
+            className={`flex flex-col items-center justify-center py-1.5 px-3 min-h-[44px] min-w-[72px] rounded-xl transition-all active:scale-95 ${
               mobileTab === 'viewer'
-                ? 'text-blue-500 font-bold'
+                ? 'text-blue-500 font-bold bg-blue-500/10'
                 : 'text-theme-muted hover:text-theme-primary'
             }`}
           >
@@ -760,9 +760,9 @@ export const App: React.FC = () => {
           <button
             type="button"
             onClick={() => setMobileTab('editor')}
-            className={`flex flex-col items-center justify-center py-1 px-3 min-h-[44px] min-w-[70px] rounded-lg transition-all active:scale-95 ${
+            className={`flex flex-col items-center justify-center py-1.5 px-3 min-h-[44px] min-w-[72px] rounded-xl transition-all active:scale-95 ${
               mobileTab === 'editor'
-                ? 'text-blue-500 font-bold'
+                ? 'text-blue-500 font-bold bg-blue-500/10'
                 : 'text-theme-muted hover:text-theme-primary'
             }`}
           >
@@ -774,7 +774,7 @@ export const App: React.FC = () => {
 
       {/* İrsaliye İstasyonu Aktifken Masaüstü Durum Çubuğu */}
       {activeView === 'station' && (
-        <div className="hidden md:block">
+        <div className="hidden lg:block">
           <StatusBar
             selectedDoc={selectedDoc}
             zoom={zoomLevel}

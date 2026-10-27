@@ -141,27 +141,27 @@ export const ItemsTable: React.FC<ItemsTableProps> = ({ items, onChange }) => {
                   <button
                     type="button"
                     onClick={() => handleRemoveItem(index)}
-                    className="p-1.5 min-w-[32px] min-h-[32px] rounded-lg text-theme-muted hover:text-rose-400 hover:bg-rose-500/10 flex items-center justify-center transition-all shrink-0 active:scale-95"
+                    className="p-1.5 min-w-[36px] min-h-[36px] rounded-lg text-theme-muted hover:text-rose-400 hover:bg-rose-500/10 flex items-center justify-center transition-all shrink-0 active:scale-95"
                     title="Kalemi Sil"
                   >
-                    <Trash2 className="w-3.5 h-3.5" />
+                    <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
 
                 {/* Miktar Stepper & Birim Seçici Satırı */}
-                <div className="flex items-center justify-between gap-2 pt-1 border-t border-theme-subtle/50">
-                  <span className="text-[10px] text-theme-muted uppercase tracking-wider font-semibold">
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-1.5 border-t border-theme-subtle/50">
+                  <span className="text-[10px] text-theme-muted uppercase tracking-wider font-semibold shrink-0">
                     Miktar & Birim:
                   </span>
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-1.5 flex-wrap">
                     {/* Hızlı Azalt (-) */}
                     <button
                       type="button"
                       onClick={() => handleStepQuantity(index, -1)}
-                      className="w-9 h-9 sm:w-8 sm:h-8 min-w-[36px] min-h-[36px] flex items-center justify-center rounded-lg bg-theme-surface hover:bg-theme-card border border-theme-subtle text-theme-secondary hover:text-theme-primary active:scale-90 transition-all touch-manipulation shadow-xs"
+                      className="w-10 h-10 sm:w-9 sm:h-9 min-w-[40px] min-h-[40px] sm:min-w-[36px] sm:min-h-[36px] flex items-center justify-center rounded-lg bg-theme-surface hover:bg-theme-card border border-theme-subtle text-theme-secondary hover:text-theme-primary active:scale-90 transition-all touch-manipulation shadow-xs"
                       title="1 Azalt"
                     >
-                      <Minus className="w-3.5 h-3.5" />
+                      <Minus className="w-4 h-4" />
                     </button>
 
                     {/* Miktar Girişi (Virgül ve Nokta Uyumlu) */}
@@ -179,24 +179,24 @@ export const ItemsTable: React.FC<ItemsTableProps> = ({ items, onChange }) => {
                         }
                       }}
                       placeholder="0"
-                      className="w-16 sm:w-20 min-h-[36px] text-center font-mono font-bold text-xs bg-theme-surface border border-theme-subtle focus:border-blue-500 rounded-lg px-1.5 py-1 text-blue-400 outline-none tabular-nums"
+                      className="w-16 sm:w-20 min-h-[40px] sm:min-h-[36px] text-center font-mono font-bold text-xs bg-theme-surface border border-theme-subtle focus:border-blue-500 rounded-lg px-1.5 py-1 text-blue-400 outline-none tabular-nums"
                     />
 
                     {/* Hızlı Arttır (+) */}
                     <button
                       type="button"
                       onClick={() => handleStepQuantity(index, 1)}
-                      className="w-9 h-9 sm:w-8 sm:h-8 min-w-[36px] min-h-[36px] flex items-center justify-center rounded-lg bg-theme-surface hover:bg-theme-card border border-theme-subtle text-theme-secondary hover:text-theme-primary active:scale-90 transition-all touch-manipulation shadow-xs"
+                      className="w-10 h-10 sm:w-9 sm:h-9 min-w-[40px] min-h-[40px] sm:min-w-[36px] sm:min-h-[36px] flex items-center justify-center rounded-lg bg-theme-surface hover:bg-theme-card border border-theme-subtle text-theme-secondary hover:text-theme-primary active:scale-90 transition-all touch-manipulation shadow-xs"
                       title="1 Arttır"
                     >
-                      <Plus className="w-3.5 h-3.5" />
+                      <Plus className="w-4 h-4" />
                     </button>
 
                     {/* Birim Seçici */}
                     <select
                       value={item.birim || 'Adet'}
                       onChange={(e) => handleItemChange(index, 'birim', e.target.value)}
-                      className="bg-theme-surface border border-theme-subtle rounded px-2 py-1 text-xs text-theme-primary font-medium outline-none focus:border-blue-500"
+                      className="bg-theme-surface border border-theme-subtle rounded-lg px-2.5 min-h-[40px] sm:min-h-[36px] text-xs text-theme-primary font-medium outline-none focus:border-blue-500"
                     >
                       {COMMON_UNITS.map((u) => (
                         <option key={u} value={u}>
