@@ -40,28 +40,6 @@ import { documentApi } from '../../services/api';
 import { parseTurkishNumber, formatTurkishNumber } from '../../utils/number';
 import { RollingNumber } from '../common/RollingNumber';
 
-// Web Audio API Low-Frequency Haptic Pulse
-const playCadenceHaptic = () => {
-  try {
-    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-    if (!AudioContextClass) return;
-    const ctx = new AudioContextClass();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(55, ctx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(32, ctx.currentTime + 0.16);
-    gain.gain.setValueAtTime(0.25, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.16);
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.start();
-    osc.stop(ctx.currentTime + 0.16);
-  } catch {
-    // AudioContext blocked or unsupported; silent fallback
-  }
-};
-
 interface DocumentEditorProps {
   document: DocumentItem | null;
   onUpdateDocument: (doc: DocumentItem) => void;
@@ -91,7 +69,7 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
   const [isActionsMenuOpen, setIsActionsMenuOpen] = useState(false);
   const [isMobileActionSheetOpen, setIsMobileActionSheetOpen] = useState(false);
   const [isCopiedErp, setIsCopiedErp] = useState(false);
-  const [cadenceWarning, setCadenceWarning] = useState(false);
+  const [discrepancyWarning, setDiscrepancyWarning] = useState(false);
   const [poMatchData, setPoMatchData] = useState<any | null>(null);
   const [isLoadingPo, setIsLoadingPo] = useState(false);
   const [isPoModalOpen, setIsPoModalOpen] = useState(false);
@@ -111,8 +89,8 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
   const actionsMenuRef = useRef<HTMLDivElement>(null);
   const jumpTimerRef = useRef<number | null>(null);
   const suspiciousTimerRef = useRef<number | null>(null);
-  const cadenceTimerRef = useRef<number | null>(null);
-  const cadenceWarningRef = useRef(false);
+  const discrepancyTimerRef = useRef<number | null>(null);
+  const discrepancyWarningRef = useRef(false);
 
   const currentDocIdRef = useRef<string | null>(document?.id || null);
   const hasUnsavedChangesRef = useRef(false);
@@ -127,7 +105,7 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
     return () => {
       if (jumpTimerRef.current) clearTimeout(jumpTimerRef.current);
       if (suspiciousTimerRef.current) clearTimeout(suspiciousTimerRef.current);
-      if (cadenceTimerRef.current) clearTimeout(cadenceTimerRef.current);
+      if (discrepancyTimerRef.current) clearTimeout(discrepancyTimerRef.current);
     };
   }, []);
 
@@ -270,7 +248,7 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [formData, document, activeTab, isNonInvoice, onDeleteDoc, isExportMenuOpen, isMobileActionSheetOpen, isPoModalOpen, isUetdsModalOpen, isErpModalOpen, cadenceWarning]);
+  }, [formData, document, activeTab, isNonInvoice, onDeleteDoc, isExportMenuOpen, isMobileActionSheetOpen, isPoModalOpen, isUetdsModalOpen, isErpModalOpen, discrepancyWarning]);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -304,7 +282,7 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
     );
   }
 
-  if (!formData || document.durum === 'kuyrukta') {
+  if (!formData) {
     return (
       <aside className="w-full h-full bg-theme-surface border-l border-theme-subtle flex flex-col shrink-0 select-none overflow-hidden min-w-0">
         <header className="h-12 border-b border-theme-subtle bg-theme-surface/95 px-4 flex items-center justify-between shrink-0">
@@ -316,32 +294,64 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
           </span>
         </header>
         <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
-          <div className="w-16 h-16 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center mb-3 text-blue-400">
-            <Sparkles className="w-8 h-8 stroke-[1.5] animate-pulse" />
+          <div className="w-14 h-14 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center mb-3 text-blue-400">
+            <FileText className="w-7 h-7 stroke-[1.5]" />
           </div>
-          <h3 className="text-sm font-semibold text-theme-primary">Ayrıştırma Bekliyor</h3>
+          <h3 className="text-sm font-semibold text-theme-primary">Belge İşlem Bekliyor</h3>
           <p className="text-xs text-theme-muted mt-1 max-w-[280px]">
-            Otomatik optik ayrıştırma motoru ile irsaliye başlıklarını, adresleri ve ürün kalemlerini tek tıkla aktarın.
+            Belge üzerindeki irsaliye numarası, cari firma bilgileri ve ürün kalemleri sisteme aktarılmayı bekliyor.
           </p>
 
-          <button
-            type="button"
-            onClick={() => onProcessDocument(document.id)}
-            disabled={isProcessing}
-            className="mt-5 flex items-center space-x-2 craft-button-primary disabled:opacity-50 text-white px-5 py-2.5 rounded-lg text-xs sm:text-sm font-semibold transition-all active:scale-95 min-h-[40px]"
-          >
-            {isProcessing ? (
-              <>
-                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                <span>Belge Çözümleniyor...</span>
-              </>
-            ) : (
-              <>
-                <Sparkles className="w-4 h-4" />
-                <span>Evrakı Otomatik Çözümle</span>
-              </>
-            )}
-          </button>
+          <div className="flex flex-col sm:flex-row items-center gap-2.5 mt-5">
+            <button
+              type="button"
+              onClick={() => onProcessDocument(document.id)}
+              disabled={isProcessing}
+              className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white px-4 py-2 rounded-lg text-xs font-semibold shadow-sm transition-all active:scale-95 min-h-[38px]"
+            >
+              {isProcessing ? (
+                <>
+                  <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  <span>Belge İşleniyor...</span>
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>Belgeyi Oku ve Aktar</span>
+                </>
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setFormData({
+                  header: {
+                    irsaliye_no: '',
+                    duzenleme_tarihi: new Date().toLocaleDateString('tr-TR'),
+                    gonderici_unvan: '',
+                    alici_unvan: '',
+                  },
+                  kalemler: [
+                    {
+                      sira_no: 1,
+                      mal_hizmet: '',
+                      miktar: 1,
+                      birim: 'Adet',
+                      notlar: '',
+                    },
+                  ],
+                  genel_toplam_miktar: 1,
+                  guven_skoru: 1.0,
+                  okunabilirlik_durumu: 'okunabilir',
+                });
+                setHasUnsavedChanges(true);
+              }}
+              className="flex items-center space-x-1.5 bg-theme-card hover:bg-theme-card-hover text-theme-secondary hover:text-theme-primary border border-theme-subtle px-3.5 py-2 rounded-lg text-xs font-medium transition-all min-h-[38px]"
+            >
+              <span>El İle Veri Girişi</span>
+            </button>
+          </div>
         </div>
       </aside>
     );
@@ -400,27 +410,21 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
   const isMathDiscrepancy = parsedDocTotalQty !== null && !isMathMatch;
 
   const handleApproveAndNext = async (force: boolean = false) => {
-    // Miktar uyuşmazlığı varsa görsel uyarı rozetini aç, ancak force veya ikinci tıklamada gecikmesiz onayla
-    if (!force && isMathDiscrepancy && !cadenceWarning) {
-      if (typeof navigator !== 'undefined' && navigator.vibrate) {
-        navigator.vibrate([30, 40]);
-      }
-      setCadenceWarning(true);
+    // Miktar uyuşmazlığı varsa uyarı bandını göster, zorla onayda veya ikinci tıklamada doğrudan kaydet
+    if (!force && isMathDiscrepancy && !discrepancyWarning) {
+      setDiscrepancyWarning(true);
       return;
     }
 
-    setCadenceWarning(false);
+    setDiscrepancyWarning(false);
     await handleSaveChanges('onaylandi');
     if (onSelectNextDoc) {
       onSelectNextDoc();
     }
   };
 
-  const handleMobileApproveWithHaptic = () => {
-    if (typeof navigator !== 'undefined' && navigator.vibrate) {
-      navigator.vibrate(18);
-    }
-    handleApproveAndNext(cadenceWarning);
+  const handleMobileApprove = () => {
+    handleApproveAndNext(discrepancyWarning);
   };
 
   const handleOpenPoReconcile = async () => {
@@ -553,7 +557,7 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
               onClick={() => onProcessDocument(document.id)}
               disabled={isProcessing}
               className="p-1 min-w-[30px] min-h-[30px] flex items-center justify-center bg-theme-card hover:bg-theme-card-hover text-theme-secondary hover:text-theme-primary rounded-md border border-theme-subtle shrink-0 transition-colors"
-              title="Belgeyi Yeniden Çözümle"
+              title="Belgeyi Yeniden Oku"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isProcessing ? 'animate-spin text-blue-400' : ''}`} />
             </button>
@@ -610,7 +614,7 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
                   >
                     <div className="flex items-center space-x-2">
                       <ShieldCheck className="w-4 h-4 text-blue-400" />
-                      <span>Kurumsal ERP Linter</span>
+                      <span>ERP Uyumluluk Kontrolü</span>
                     </div>
                     <span className="text-[10px] font-mono font-bold text-blue-400">%{Math.round(erpLintData.overall_score || 0)}</span>
                   </button>
@@ -639,7 +643,7 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
                       className="w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-lg text-theme-secondary hover:bg-theme-card hover:text-theme-primary transition-colors text-left"
                     >
                       <Building2 className="w-4 h-4 text-amber-400" />
-                      <span>3-Way PO Eşleştirme</span>
+                      <span>Sipariş (PO) Eşleştirme</span>
                     </button>
 
                     <button
@@ -697,15 +701,14 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
         </div>
       </header>
 
-      {/* Cadence Braking (Ritmik Frenleme) Mikro-Direnç Uyarı Bandı */}
-      {cadenceWarning && (
-        <div className="p-2.5 mx-3 mt-2 rounded-xl bg-amber-500/15 border border-amber-500/40 cadence-shake flex flex-col gap-2 shadow-lg shrink-0">
+      {/* Toplam Miktar Uyuşmazlığı Uyarı Bandı */}
+      {discrepancyWarning && (
+        <div className="p-2.5 mx-3 mt-2 rounded-xl bg-amber-500/15 border border-amber-500/40 flex flex-col gap-2 shadow-sm shrink-0">
           <div className="flex items-start space-x-2">
             <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between">
-                <h4 className="text-xs font-bold text-amber-300">Ritmik Frenleme: Miktar Uyuşmazlığı!</h4>
-                <span className="text-[10px] text-amber-300/80 font-mono">3sn içinde override</span>
+                <h4 className="text-xs font-bold text-amber-300">Toplam Miktar Uyuşmazlığı</h4>
               </div>
               <p className="text-[11px] text-amber-200/90 leading-tight mt-0.5">
                 Kalemler toplamı ({totalCalculatedQty.toLocaleString('tr-TR')}) ile irsaliye dip toplamı ({parsedDocTotalQty?.toLocaleString('tr-TR')}) uyuşmuyor.
@@ -716,12 +719,12 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
             <button
               type="button"
               onClick={() => {
-                cadenceWarningRef.current = false;
-                setCadenceWarning(false);
+                discrepancyWarningRef.current = false;
+                setDiscrepancyWarning(false);
               }}
               className="px-2.5 py-1 text-[11px] rounded bg-theme-card hover:bg-theme-card-hover text-theme-secondary hover:text-theme-primary transition-all font-medium border border-theme-subtle"
             >
-              Düzelt
+              Kontrol Et / Düzelt
             </button>
             <button
               type="button"
@@ -746,7 +749,7 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
               Resmi Sevk İrsaliyesi Niteliği Taşımıyor
             </h3>
             <p className="text-xs text-theme-secondary leading-relaxed font-sans">
-              Optik ayrıştırma motoru bu evrakta geçerli bir irsaliye numarası, gönderici/alıcı firma veya mal/hizmet kalem tablosu tespit edemedi.
+              Bu belgede geçerli bir irsaliye numarası, gönderici/alıcı firma bilgisi veya ürün kalem tablosu tespit edilemedi.
             </p>
             {formData.genel_notlar && (
               <div className="p-3 bg-rose-950/30 border border-rose-500/20 rounded-lg text-left">
@@ -921,17 +924,17 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
 
             <button
               type="button"
-              onClick={handleMobileApproveWithHaptic}
+              onClick={handleMobileApprove}
               disabled={isSaving}
               className={`flex-1 min-h-[44px] px-4 rounded-xl text-xs font-bold flex items-center justify-center space-x-2 shadow-lg transition-all thumb-approve-btn ${
-                isMathDiscrepancy && cadenceWarning
+                isMathDiscrepancy && discrepancyWarning
                   ? 'bg-amber-600 hover:bg-amber-500 text-white shadow-amber-600/30'
                   : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/30'
               }`}
             >
               {isSaving ? (
                 <span>Kaydediliyor...</span>
-              ) : isMathDiscrepancy && cadenceWarning ? (
+              ) : isMathDiscrepancy && discrepancyWarning ? (
                 <>
                   <AlertTriangle className="w-4 h-4 text-white shrink-0" />
                   <span>Yine de Onayla</span>
@@ -987,7 +990,7 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
                 >
                   <div className="flex items-center space-x-2">
                     <ShieldCheck className="w-4 h-4 text-blue-400" />
-                    <span>ERP Linter & Şema Doğrulayıcı</span>
+                    <span>ERP Uyumluluk Kontrolü</span>
                   </div>
                   <span className="font-mono text-[10px] font-bold bg-blue-500/20 px-1.5 py-0.5 rounded">
                     %{Math.round(erpLintData.overall_score || 0)}
@@ -1005,10 +1008,10 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
                 className="w-full flex items-center space-x-2 p-2.5 rounded-xl bg-theme-card hover:bg-theme-card-hover border border-theme-subtle text-xs font-medium text-theme-primary transition-all text-left"
               >
                 <Truck className="w-4 h-4 text-blue-400" />
-                <span>U-ETDS Sefer Bildirimi & SOAP XML</span>
+                <span>U-ETDS Sefer Bildirimi</span>
               </button>
 
-              {/* 3-Way PO Eşleştirme */}
+              {/* Sipariş (PO) Eşleştirme */}
               <button
                 type="button"
                 onClick={() => {
@@ -1018,7 +1021,7 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
                 className="w-full flex items-center space-x-2 p-2.5 rounded-xl bg-theme-card hover:bg-theme-card-hover border border-theme-subtle text-xs font-medium text-theme-primary transition-all text-left"
               >
                 <Building2 className="w-4 h-4 text-indigo-400" />
-                <span>3-Way ERP Sipariş Eşleştirme</span>
+                <span>Sipariş (PO) Eşleştirme</span>
               </button>
 
               {/* ERP JSON Kopyalama */}
@@ -1059,7 +1062,7 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
                 </a>
               </div>
 
-              {/* Yeniden Çözümle */}
+              {/* Yeniden Oku */}
               <button
                 type="button"
                 onClick={() => {
@@ -1070,7 +1073,7 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
                 className="w-full flex items-center space-x-2 p-2.5 rounded-xl bg-theme-card hover:bg-theme-card-hover border border-theme-subtle text-xs font-medium text-theme-primary transition-all text-left"
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${isProcessing ? 'animate-spin text-blue-400' : 'text-theme-muted'}`} />
-                <span>Evrakı Yeniden Çözümle</span>
+                <span>Belgeyi Yeniden Oku</span>
               </button>
             </div>
 
@@ -1086,7 +1089,7 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
         </div>
       )}
 
-      {/* 3-Way PO ERP Reconciliation Modal */}
+      {/* Sipariş PO Eşleşme Modalı */}
       {isPoModalOpen && poMatchData && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs">
           <div className="bg-theme-surface border border-theme-subtle rounded-xl max-w-lg w-full p-5 space-y-4 shadow-2xl relative animate-in fade-in zoom-in-95 duration-150">
@@ -1096,7 +1099,7 @@ export const DocumentEditor: React.FC<DocumentEditorProps> = ({
                   <Building2 className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-theme-primary">3-Way PO Eşleşme Raporu</h3>
+                  <h3 className="text-sm font-bold text-theme-primary">Sipariş (PO) Eşleştirme Raporu</h3>
                   <p className="text-[10px] text-theme-muted font-mono">
                     Sipariş: {poMatchData.po_no} • VKN: {poMatchData.vkn_checksum_valid ? '✓ Modulo-10 Doğrulandı' : '⚠ VKN Hatası'}
                   </p>

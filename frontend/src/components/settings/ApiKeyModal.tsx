@@ -81,7 +81,7 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
             </div>
             <div className="min-w-0">
               <h2 className="text-sm font-semibold text-theme-primary truncate">Sistem Ayarları</h2>
-              <p className="text-xs text-theme-muted truncate">Google Gemini API Yapılandırması</p>
+              <p className="text-xs text-theme-muted truncate">Merkezi Belge Okuma Servis Bağlantısı</p>
             </div>
           </div>
           <button
@@ -94,9 +94,9 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
 
         <form onSubmit={handleSave} className="p-5 space-y-4">
           <div className="text-xs text-theme-secondary bg-theme-card border border-theme-subtle p-3 rounded-xl space-y-1">
-            <p className="text-theme-primary font-semibold">Gemini API Yapılandırması</p>
+            <p className="text-theme-primary font-semibold">Servis Bağlantı Yapılandırması</p>
             <p className="text-theme-muted">
-              Evrak işleme ve optik ayrıştırma motoru için Google Gemini API anahtarınızı tanımlayın.
+              İrsaliye ve sevk evraklarının otomatik okunabilmesi için sistem lisans ve servis anahtarınızı tanımlayınız.
             </p>
           </div>
 

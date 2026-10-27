@@ -64,7 +64,7 @@ export const QueueItem: React.FC<QueueItemProps> = ({
           return (
             <span className="inline-flex items-center space-x-1 text-[10px] text-slate-400 font-medium shrink-0" title="Resmi sevk irsaliyesi değil">
               <AlertCircle className="w-3 h-3 text-amber-400" />
-              <span>Dışı</span>
+              <span>İrsaliye Dışı</span>
             </span>
           );
         }
@@ -85,7 +85,7 @@ export const QueueItem: React.FC<QueueItemProps> = ({
         return (
           <span 
             className="inline-flex items-center space-x-1 text-[10px] text-rose-400 font-medium shrink-0 cursor-help"
-            title={doc.hata_mesaji || 'Belge ayrıştırılırken hata oluştu'}
+            title={doc.hata_mesaji || 'Belge işlenirken hata oluştu'}
           >
             <AlertCircle className="w-3 h-3 shrink-0" />
             <span>Hata</span>
@@ -214,9 +214,9 @@ export const QueueItem: React.FC<QueueItemProps> = ({
                   type="button"
                   onClick={onProcess}
                   className="text-[10px] text-rose-400 hover:text-rose-300 font-semibold hover:underline"
-                  title="Ayrıştırmayı Yeniden Dene"
+                  title="Belgeyi Yeniden Oku"
                 >
-                  Tekrar Dene
+                  Yeniden Dene
                 </button>
               )}
               {itemsCount !== undefined && itemsCount > 0 && (

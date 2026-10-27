@@ -32,6 +32,7 @@ import {
   Activity,
   Sliders,
   ExternalLink,
+  FileText,
 } from 'lucide-react';
 import {
   WorkspaceLayoutMode,
@@ -481,7 +482,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
               </button>
 
-              {/* Sekme 2: Yapay Zeka & Gemini API */}
+              {/* Sekme 2: Sistem ve Servis Bağlantısı */}
               <button
                 type="button"
                 onClick={() => setActiveTab('ai')}
@@ -494,22 +495,22 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <div
                   className={`p-1.5 rounded-lg shrink-0 ${
                     activeTab === 'ai'
-                      ? 'bg-purple-500/20 text-purple-400'
+                      ? 'bg-blue-500/20 text-blue-400'
                       : 'text-theme-muted'
                   }`}
                 >
-                  <Sparkles className="w-4 h-4" />
+                  <Key className="w-4 h-4" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="font-semibold truncate">Yapay Zeka & AI</div>
+                  <div className="font-semibold truncate">Servis Bağlantısı</div>
                   <div className="text-[10px] text-theme-muted truncate">
-                    Gemini API, OCR & İmla
+                    Belge Okuma ve Lisans
                   </div>
                 </div>
                 {apiKeyStatus?.is_configured && (
                   <span
                     className="w-2 h-2 rounded-full bg-emerald-400 shrink-0"
-                    title="API Anahtarı Tanımlı"
+                    title="Servis Anahtarı Tanımlı"
                   />
                 )}
               </button>
@@ -847,13 +848,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     <div className="flex items-center justify-between p-3.5 bg-theme-card border border-theme-subtle rounded-xl">
                       <div className="min-w-0 pr-3">
                         <div className="text-xs font-semibold text-theme-primary flex items-center space-x-1.5">
-                          <span>Fibonacci & Mikro-Kova Animasyonu (Progressive Tile Render)</span>
+                          <span>Kademeli Çözünürlük ve Hızlı Önizleme</span>
                           <span className="text-[9px] uppercase px-1.5 py-0.2 rounded bg-emerald-500/10 text-emerald-400 font-mono">
-                            GPU
+                            Aktif
                           </span>
                         </div>
                         <p className="text-[11px] text-theme-muted mt-0.5">
-                          140 mikro-karo ve çift spektral lazer bıçağı ile görselleştirilmiş progresif tarama efekti.
+                          Yüksek çözünürlüklü ve taranmış belgelerde kademeli netleştirme önbelleği.
                         </p>
                       </div>
                       <button
@@ -873,17 +874,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       </button>
                     </div>
 
-                    {/* Seçenek 2: Akıcı Tuval (Silky Smooth Viewport) */}
+                    {/* Seçenek 2: Akıcı Tuval */}
                     <div className="flex items-center justify-between p-3.5 bg-theme-card border border-theme-subtle rounded-xl">
                       <div className="min-w-0 pr-3">
                         <div className="text-xs font-semibold text-theme-primary flex items-center space-x-1.5">
-                          <span>Akıcı Tuval (Silky Smooth Viewport)</span>
+                          <span>Akıcı Tuval Görünümü</span>
                           <span className="text-[9px] uppercase px-1.5 py-0.2 rounded bg-blue-500/10 text-blue-400 font-mono">
-                            120 FPS
+                            Aktif
                           </span>
                         </div>
                         <p className="text-[11px] text-theme-muted mt-0.5">
-                          Apple-grade Bezier yumuşak yakınlaştırma, kaydırma ve haptik direnç fiziği.
+                          Yumuşak yakınlaştırma ve kaydırma hareketleri.
                         </p>
                       </div>
                       <button
@@ -908,7 +909,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             )}
 
             {/* ========================================================= */}
-            {/* SEKME 2: YAPAY ZEKA & GEMINI API */}
+            {/* SEKME 2: SERVİS BAĞLANTISI */}
             {/* ========================================================= */}
             {activeTab === 'ai' && (
               <div className="space-y-6 tab-pane-enter">
@@ -916,26 +917,26 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <div>
                   <div className="flex items-center justify-between mb-1">
                     <div className="flex items-center space-x-2">
-                      <Key className="w-4 h-4 text-purple-400" />
+                      <Key className="w-4 h-4 text-blue-400" />
                       <h3 className="text-xs font-bold text-theme-primary uppercase tracking-wider">
-                        Google Gemini API Yapılandırması
+                        Merkezi Belge Okuma Servis Bağlantısı
                       </h3>
                     </div>
                     {/* Durum Rozeti */}
                     {apiKeyStatus?.is_configured ? (
                       <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-[11px] font-medium bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
                         <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                        <span>Tanımlı & Aktif</span>
+                        <span>Bağlantı Aktif</span>
                       </span>
                     ) : (
                       <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-[11px] font-medium bg-amber-500/15 text-amber-400 border border-amber-500/30">
                         <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
-                        <span>Anahtar Eksik</span>
+                        <span>Anahtar Tanımlanmadı</span>
                       </span>
                     )}
                   </div>
                   <p className="text-xs text-theme-muted mb-4">
-                    İrsaliye optik okuma, tablo ayrıştırma ve akıllı imla denetimi için Google AI Studio anahtarınızı tanımlayın.
+                    İrsaliye ve sevk evraklarının otomatik okunabilmesi için sistem lisans ve servis anahtarınızı tanımlayınız.
                   </p>
 
                   {/* Form Girişi */}
@@ -945,7 +946,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   >
                     <div className="flex items-center justify-between gap-2 min-w-0">
                       <label className="text-xs font-semibold text-theme-secondary">
-                        Gemini API Anahtarı
+                        Servis Lisans Anahtarı
                       </label>
                       {apiKeyStatus?.masked_key && (
                         <span className="text-[11px] font-mono text-emerald-400/90 truncate">
@@ -1058,24 +1059,24 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </form>
                 </div>
 
-                {/* 2. OCR ve Dot-Matrix İmla Motoru Durumu */}
+                {/* 2. Metin ve Karakter Doğrulama Servisi */}
                 <div className="pt-2 border-t border-theme-subtle">
                   <div className="flex items-center space-x-2 mb-1">
                     <Cpu className="w-4 h-4 text-emerald-400" />
                     <h3 className="text-xs font-bold text-theme-primary uppercase tracking-wider">
-                      Optik Okuma & İmla Düzeltme Motoru
+                      Metin ve Karakter Doğrulama Servisi
                     </h3>
                   </div>
                   <p className="text-xs text-theme-muted mb-3.5">
-                    İğneli yazıcı (dot-matrix) ve faks çıktılarındaki silik harfleri otomatik onaran akıllı nöral motor.
+                    Nokta vuruşlu yazıcı ve faks çıktılarındaki silik karakterleri ticari sözlük kurallarıyla denetleyen doğrulama modülü.
                   </p>
 
                   <div className="p-4 bg-theme-card border border-theme-subtle rounded-xl space-y-3">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-2">
-                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
                         <span className="text-xs font-bold text-theme-primary">
-                          Dot-matrix İmla Düzeltme Motoru: Aktif
+                          Karakter Doğrulama Servisi: Hazır
                         </span>
                       </div>
                       <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 font-semibold">
@@ -1084,8 +1085,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     </div>
 
                     <p className="text-xs text-theme-secondary leading-relaxed">
-                      Nokta vuruşlu yazıcı şerit solukluklarını, dağılmış mürekkepleri ve Türkçe özel karakterlerini (ç, ğ, ı, ö, ş, ü, İ)
-                      LLM tabanlı kelime bağlamıyla doğrular; alt toplam (subtotal) ve sayfa devir satırlarını kalemlerden ayıklar.
+                      Nokta vuruşlu yazıcı çıktılarını, silik harfleri ve Türkçe ticari terimleri standartlara uygun olarak doğrular;
+                      alt toplam ve sayfa devir satırlarını kalemlerden ayıklar.
                     </p>
 
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-theme-subtle text-[11px] text-theme-muted font-medium">
@@ -1098,8 +1099,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         <span>Devir Satırı Filtresi</span>
                       </div>
                       <div className="flex items-center space-x-1.5">
-                        <Sparkles className="w-3.5 h-3.5 text-purple-400 shrink-0" />
-                        <span>Eğrilik (Deskew) Düzeltme</span>
+                        <Check className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                        <span>Eğrilik Düzeltme</span>
                       </div>
                       <div className="flex items-center space-x-1.5">
                         <QrCode className="w-3.5 h-3.5 text-amber-400 shrink-0" />
@@ -1163,17 +1164,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       </button>
                     </div>
 
-                    {/* Buton 2: Demo İrsaliye Yükle */}
+                    {/* Buton 2: Örnek İrsaliye Yükle */}
                     <div className="p-4 bg-theme-card border border-theme-subtle rounded-xl flex flex-col justify-between space-y-3">
                       <div>
                         <div className="flex items-center space-x-2 mb-1">
-                          <Sparkles className="w-4 h-4 text-purple-400" />
+                          <FileText className="w-4 h-4 text-blue-400" />
                           <h4 className="text-xs font-bold text-theme-primary">
-                            Demo İrsaliye Yükle
+                            Örnek İrsaliye Yükle
                           </h4>
                         </div>
                         <p className="text-[11px] text-theme-muted leading-relaxed">
-                          Sistemi ve ayrıştırma hızını test etmek için ambar veri tabanına 1 adet örnek resmi sevk irsaliyesi enjekte eder.
+                          Sistem doğrulaması için ambar veri tabanına 1 adet örnek resmi sevk irsaliyesi yükler.
                         </p>
                       </div>
 
@@ -1181,17 +1182,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         type="button"
                         onClick={handleLoadDemo}
                         disabled={isLoadingDemo}
-                        className="flex items-center justify-center space-x-1.5 w-full py-2 px-3 text-xs font-semibold bg-purple-600/15 hover:bg-purple-600/25 text-purple-300 border border-purple-500/30 rounded-lg transition-colors disabled:opacity-50"
+                        className="flex items-center justify-center space-x-1.5 w-full py-2 px-3 text-xs font-semibold bg-blue-600/15 hover:bg-blue-600/25 text-blue-300 border border-blue-500/30 rounded-lg transition-colors disabled:opacity-50"
                       >
                         {isLoadingDemo ? (
                           <>
-                            <Loader2 className="w-3.5 h-3.5 animate-spin text-purple-400" />
-                            <span>Demo Yükleniyor...</span>
+                            <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-400" />
+                            <span>Yükleniyor...</span>
                           </>
                         ) : (
                           <>
-                            <Sparkles className="w-3.5 h-3.5 text-purple-400" />
-                            <span>Demo İrsaliye Yükle</span>
+                            <FileText className="w-3.5 h-3.5 text-blue-400" />
+                            <span>Örnek İrsaliye Yükle</span>
                           </>
                         )}
                       </button>

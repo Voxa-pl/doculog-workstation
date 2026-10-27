@@ -253,8 +253,8 @@ export const ItemsTable: React.FC<ItemsTableProps> = ({ items, onChange }) => {
             <tbody className="divide-y divide-theme-subtle">
               {safeItems.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-6 text-center text-theme-muted text-xs">
-                    Kayıt Bulunamadı
+                  <td colSpan={6} className="py-8 text-center text-theme-muted text-xs">
+                    Kayıtlı ürün veya malzeme kalemi bulunamadı. Kalem eklemek için yukarıdaki '+ Kalem Ekle' butonuna basınız.
                   </td>
                 </tr>
               ) : (
@@ -269,9 +269,18 @@ export const ItemsTable: React.FC<ItemsTableProps> = ({ items, onChange }) => {
 
                     <td className="py-1 px-1.5 min-w-[140px]">
                       <input
+                        id={`item-name-${index}`}
                         type="text"
                         value={getItemName(item)}
                         onChange={(e) => handleItemChange(index, 'mal_hizmet', e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            const qtyEl = document.getElementById(`item-qty-${index}`);
+                            qtyEl?.focus();
+                            (qtyEl as HTMLInputElement)?.select?.();
+                          }
+                        }}
                         placeholder="Ürün / Mal tanımı..."
                         className="w-full bg-transparent hover:bg-theme-surface/80 focus:bg-theme-surface border border-transparent focus:border-blue-500 rounded px-2 py-1 text-theme-primary text-xs focus:outline-none transition-colors min-h-[30px]"
                       />
@@ -279,6 +288,7 @@ export const ItemsTable: React.FC<ItemsTableProps> = ({ items, onChange }) => {
 
                     <td className="py-1 px-1 text-right w-20">
                       <input
+                        id={`item-qty-${index}`}
                         type="text"
                         inputMode="decimal"
                         value={
@@ -293,6 +303,22 @@ export const ItemsTable: React.FC<ItemsTableProps> = ({ items, onChange }) => {
                           } else {
                             const parsed = parseTurkishNumber(val);
                             handleItemChange(index, 'miktar', parsed !== null ? parsed : val);
+                          }
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            if (index < safeItems.length - 1) {
+                              const nextEl = document.getElementById(`item-name-${index + 1}`);
+                              nextEl?.focus();
+                              (nextEl as HTMLInputElement)?.select?.();
+                            } else {
+                              handleAddItem();
+                              setTimeout(() => {
+                                const newEl = document.getElementById(`item-name-${index + 1}`);
+                                newEl?.focus();
+                              }, 50);
+                            }
                           }
                         }}
                         placeholder="0"

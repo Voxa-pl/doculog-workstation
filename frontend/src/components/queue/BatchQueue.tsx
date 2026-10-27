@@ -277,9 +277,9 @@ export const BatchQueue: React.FC<BatchQueueProps> = ({
                   ? 'bg-blue-600/25 text-blue-300 font-semibold border border-blue-500/30'
                   : 'text-theme-muted hover:text-theme-primary'
               }`}
-              title={`Doğrulanmış Sevk İrsaliyeleri (${invoiceCount})`}
+              title={`Doğrulanmış ve Onaylanmış İrsaliyeler (${invoiceCount})`}
             >
-              İrsaliye ({invoiceCount})
+              Tamamlanan ({invoiceCount})
             </button>
             <button
               type="button"
@@ -289,7 +289,7 @@ export const BatchQueue: React.FC<BatchQueueProps> = ({
                   ? 'bg-amber-600/25 text-amber-300 font-semibold border border-amber-500/30'
                   : 'text-theme-muted hover:text-theme-primary'
               }`}
-              title={`Bekleyen ve Hata Alan Evraklar (${pendingCount})`}
+              title={`İşlem Bekleyen Evraklar (${pendingCount})`}
             >
               Bekleyen ({pendingCount})
             </button>
@@ -301,9 +301,9 @@ export const BatchQueue: React.FC<BatchQueueProps> = ({
                   ? 'bg-rose-600/25 text-rose-300 font-semibold border border-rose-500/30'
                   : 'text-theme-muted hover:text-theme-primary'
               }`}
-              title={`Uyumsuz / İrsaliye Olmayanlar (${nonInvoiceCount})`}
+              title={`Resmi Sevk İrsaliyesi Olmayan Evraklar (${nonInvoiceCount})`}
             >
-              Uyumsuz ({nonInvoiceCount})
+              İrsaliye Dışı ({nonInvoiceCount})
             </button>
           </div>
         </div>

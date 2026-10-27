@@ -382,7 +382,7 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
             testId="kpi-total-items"
             title="Toplam İşlenen Kalem Miktarı"
             value={totalQtyKpi.toLocaleString('tr-TR')}
-            subtitle={`${activeMetrics.kpi?.toplam_islenen_kalem_adedi || 0} satır ayrıştırıldı`}
+            subtitle={`${activeMetrics.kpi?.toplam_islenen_kalem_adedi || 0} satır işlendi`}
             badge={{ text: 'Depo Stok Akışı', neutral: true }}
             icon={<Boxes className="w-5 h-5" />}
             accentColor="amber"
@@ -392,7 +392,7 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
             testId="kpi-digitization-speed"
             title="Ortalama Dijitalleştirme Hızı"
             value={`${speedKpi.toFixed(1)} sn`}
-            subtitle="Evrak başı ortalama çözümleme süresi"
+            subtitle="Evrak başı ortalama işlem süresi"
             badge={{ text: 'Yüksek Performans', positive: true }}
             icon={<Zap className="w-5 h-5" />}
             accentColor="purple"

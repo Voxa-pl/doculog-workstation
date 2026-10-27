@@ -217,7 +217,7 @@ export const QrBridgeModal: React.FC<QrBridgeModalProps> = ({
               </div>
               <h4 className="text-sm font-bold text-theme-primary">İrsaliye Başarıyla Aktarıldı!</h4>
               <p className="text-xs text-theme-secondary max-w-xs break-words">
-                <span className="text-emerald-400 font-semibold">{receivedDocName}</span> ayrıştırma masasına aktarıldı.
+                <span className="text-emerald-400 font-semibold">{receivedDocName}</span> çalışma alanına aktarıldı.
               </p>
             </div>
           ) : (

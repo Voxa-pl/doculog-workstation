@@ -200,7 +200,7 @@ export const ViewerToolbar: React.FC<ViewerToolbarProps> = ({
               onClick={onDeskew}
               disabled={isDeskewing || isSavingRotation}
               className="flex items-center space-x-1 px-2 py-1 min-h-[28px] justify-center text-cyan-400 hover:text-cyan-300 hover:bg-cyan-950/40 border border-cyan-800/40 rounded transition-colors disabled:opacity-50"
-              title="Evrak Eğikliğini / Perspektifini Düzelt (Auto Deskew)"
+              title="Evrak Eğikliğini Düzelt"
               aria-label="Eğikliği Düzelt"
             >
               {isDeskewing ? (

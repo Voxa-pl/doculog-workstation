@@ -14,7 +14,8 @@ import {
   X, 
   HardDriveDownload, 
   Download, 
-  Settings 
+  Settings,
+  Play 
 } from 'lucide-react';
 import { BatchSummary, ApiKeyStatus, AppView } from '../../types/irsaliye';
 import { documentApi, systemApi } from '../../services/api';
@@ -142,7 +143,7 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
             </>
           ) : (
             <>
-              <Sparkles className="w-3.5 h-3.5" />
+              <Play className="w-3.5 h-3.5 fill-current" />
               <span className="hidden sm:inline">Tümünü İşle</span>
             </>
           )}
