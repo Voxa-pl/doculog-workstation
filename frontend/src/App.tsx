@@ -12,8 +12,7 @@ import { documentApi } from './services/api';
 import { useLiveSync } from './hooks/useLiveSync';
 import { HeaderBar } from './components/common/HeaderBar';
 import { StatusBar } from './components/common/StatusBar';
-import { ApiKeyModal } from './components/common/ApiKeyModal';
-import { QrBridgeModal } from './components/common/QrBridgeModal';
+import { SettingsModal, SettingsTab } from './components/settings/SettingsModal';
 import { BatchQueue } from './components/queue/BatchQueue';
 import { CollapsibleDockRail } from './components/queue/CollapsibleDockRail';
 import { DocumentViewer } from './components/viewer/DocumentViewer';
@@ -49,8 +48,8 @@ export const App: React.FC = () => {
     onaylanan: 0,
   });
   const [apiKeyStatus, setApiKeyStatus] = useState<ApiKeyStatus | null>(null);
-  const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
-  const [isQrBridgeModalOpen, setIsQrBridgeModalOpen] = useState(false);
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+  const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab>('gorunum');
   const [isUploading, setIsUploading] = useState(false);
   const [isProcessingBatch, setIsProcessingBatch] = useState(false);
   const [isProcessingCurrent, setIsProcessingCurrent] = useState(false);
@@ -71,12 +70,12 @@ export const App: React.FC = () => {
     try {
       const saved = localStorage.getItem('doculog_layout_mode');
       if (saved === 'three-column' || saved === 'collapsible-dock' || saved === 'focus-studio') {
-        return saved;
+        return saved as WorkspaceLayoutMode;
       }
     } catch (e) {
       console.warn('Layout mode okunamadı:', e);
     }
-    return 'collapsible-dock'; // Varsayılan: Akıllı Çekmece
+    return 'three-column'; // Varsayılan: Kararlı ve Sabit Klasik 3 Sütun
   });
 
   // Kalıcı düzen modu kaydı
@@ -158,6 +157,13 @@ export const App: React.FC = () => {
         if (isInput || isContentEditable) {
           return; // Form alanlarında yazı yazılıyorken kısayolu yutma
         }
+      }
+
+      // Ctrl+, veya Cmd+, ile Ayarlar modalını aç
+      if ((e.ctrlKey || e.metaKey) && e.key === ',') {
+        e.preventDefault();
+        setIsSettingsModalOpen((prev) => !prev);
+        return;
       }
 
       if (e.key === 'Escape' && isQueuePeeking) {
@@ -362,6 +368,16 @@ export const App: React.FC = () => {
     }
   };
 
+  const handleResetAllDocuments = async () => {
+    if (!window.confirm('Tüm okunmuş veya hata durumundaki evraklar sıfırlanıp okunmamış (kuyrukta) durumuna getirilecek. Devam etmek istiyor musunuz?')) return;
+    try {
+      await documentApi.resetAllDocuments();
+      await fetchDocuments();
+    } catch (err) {
+      console.error('Evrakları sıfırlama hatası:', err);
+    }
+  };
+
   const handleClearAll = async () => {
     if (!window.confirm('Tüm belgeler silinecek. Emin misiniz?')) return;
     try {
@@ -494,18 +510,14 @@ export const App: React.FC = () => {
       <HeaderBar
         summary={summary}
         apiKeyStatus={apiKeyStatus}
-        onOpenApiKeyModal={() => setIsApiKeyModalOpen(true)}
-        onOpenQrBridgeModal={() => setIsQrBridgeModalOpen(true)}
+        onOpenSettings={(tab) => {
+          if (tab) setSettingsInitialTab(tab);
+          setIsSettingsModalOpen(true);
+        }}
         onProcessAll={handleProcessAll}
-        onClearAll={handleClearAll}
-        onExportBatchExcel={handleExportBatchExcel}
         isProcessingBatch={isProcessingBatch}
         activeView={activeView}
         onViewChange={setActiveView}
-        theme={theme}
-        onThemeChange={setTheme}
-        layoutMode={layoutMode}
-        onLayoutModeChange={setLayoutMode}
       />
 
       {/* Ana Çalışma Alanı: Desktop 3 Farklı Mod / Mobil Sekme Değişimi */}
@@ -564,13 +576,6 @@ export const App: React.FC = () => {
                   onUploadFiles={handleUploadFiles}
                 />
               </div>
-
-              {/* Hover Tetikleyici Görünmez Sol Şerit (Fare sol kenara yaklaştığında açılmayı hızlandırır) */}
-              <div
-                onMouseEnter={handleTriggerPeekOpen}
-                className="hidden md:block absolute top-0 bottom-0 left-0 w-3 z-30 pointer-events-auto"
-                aria-hidden="true"
-              />
 
               {/* Arka Plan Cam Katmanı (Çekmece Açıkken) */}
               <div
@@ -779,17 +784,31 @@ export const App: React.FC = () => {
       )}
 
       {/* Modallar */}
-      <ApiKeyModal
-        isOpen={isApiKeyModalOpen}
-        onClose={() => setIsApiKeyModalOpen(false)}
-        onSaved={fetchApiKeyStatus}
-        currentMaskedKey={apiKeyStatus?.masked_key}
-      />
-
-      <QrBridgeModal
-        isOpen={isQrBridgeModalOpen}
-        onClose={() => setIsQrBridgeModalOpen(false)}
+      {/* Merkezi İstasyon & Sistem Ayarları Modalı */}
+      <SettingsModal
+        isOpen={isSettingsModalOpen}
+        onClose={() => setIsSettingsModalOpen(false)}
+        layoutMode={layoutMode}
+        onLayoutModeChange={(mode) => {
+          setLayoutMode(mode);
+          try {
+            localStorage.setItem('doculog_layout_mode', mode);
+          } catch (e) {}
+        }}
+        theme={theme}
+        onThemeChange={(newTheme) => {
+          setTheme(newTheme);
+          try {
+            localStorage.setItem('doculog_theme', newTheme);
+          } catch (e) {}
+        }}
+        apiKeyStatus={apiKeyStatus}
+        onApiKeySaved={fetchApiKeyStatus}
+        onResetAllDocuments={handleResetAllDocuments}
+        onClearAllDocuments={handleClearAll}
+        onLoadDemoDocument={handleLoadDemo}
         onDocumentReceived={handleMobileDocumentReceived}
+        initialTab={settingsInitialTab}
       />
 
       {/* Kaydedilmemiş Değişiklikler Uyarı Modalı */}

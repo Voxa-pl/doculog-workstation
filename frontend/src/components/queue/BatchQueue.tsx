@@ -11,7 +11,8 @@ import {
   FolderDown, 
   AlertCircle,
   Sparkles,
-  Merge
+  Merge,
+  RotateCcw
 } from 'lucide-react';
 
 interface BatchQueueProps {
@@ -24,6 +25,7 @@ interface BatchQueueProps {
   onProcessDoc: (id: string) => void;
   onLoadDemo?: () => void;
   onMergeDocuments?: (targetDocId: string, sourceDocIds: string[]) => void;
+  onResetAll?: () => void;
   isUploading: boolean;
 }
 
@@ -37,6 +39,7 @@ export const BatchQueue: React.FC<BatchQueueProps> = ({
   onProcessDoc,
   onLoadDemo,
   onMergeDocuments,
+  onResetAll,
   isUploading,
 }) => {
   type QueueFilterMode = 'all' | 'invoices' | 'pending' | 'non_invoices';

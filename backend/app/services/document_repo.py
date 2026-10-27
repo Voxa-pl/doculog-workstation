@@ -269,6 +269,32 @@ class DocumentRepository:
         return deleted
 
     @classmethod
+    def reset_all_to_unread(cls) -> int:
+        """
+        Okunmuş veya hata durumundaki tüm evrakları 'kuyrukta' (okunmamış) durumuna çevirir.
+        Veri ve hata mesajlarını sıfırlar. Cache'i temizler.
+        """
+        cls._cache_clear()
+        with cls.get_db() as db:
+            try:
+                models = db.query(DocumentModel).all()
+                count = 0
+                now_ts = int(time.time() * 1000)
+                for m in models:
+                    m.durum = ProcessingStatus.KUYRUKTA.value
+                    m.veri = None
+                    m.hata_mesaji = None
+                    m.guncellenme_ts = now_ts
+                    count += 1
+                db.commit()
+                logger.info(f"{count} adet evrak başarıyla 'kuyrukta' (okunmamış) durumuna sıfırlandı.")
+                return count
+            except Exception as e:
+                db.rollback()
+                logger.error(f"Evraklar okunmamış durumuna getirilirken hata: {e}")
+                raise
+
+    @classmethod
     def get_status_counts(cls) -> Dict[str, int]:
         """
         Tüm evrakları bellek ve JSON yükü olmadan doğrudan SQLite indeksli

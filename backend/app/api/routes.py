@@ -505,6 +505,20 @@ async def process_all_documents(background_tasks: BackgroundTasks):
             return {"mesaj": "Toplu işlem kontrollü kuyrukla başlatıldı", "islenen_adet": len(to_process)}
         return {"mesaj": "İşlenecek bekleyen evrak yok", "islenen_adet": 0}
 
+@router.post("/documents/reset-all")
+async def reset_all_documents_to_unread():
+    """
+    Okunmuş/işlenmiş tüm evrakları sıfırlayarak 'kuyrukta' (okunmamış) durumuna çevirir.
+    Veri ve hata mesajlarını temizler, WebSocket ile arayüze anlık yayınlar.
+    """
+    count = doc_repo.reset_all_to_unread()
+    await ws_manager.broadcast_all({
+        "type": "DOCUMENTS_UPDATED",
+        "action": "reset_all",
+        "count": count
+    })
+    return {"mesaj": f"{count} adet evrak okunmamış (kuyrukta) durumuna getirildi.", "sifirlanan_adet": count}
+
 @router.post("/documents/{doc_id}/rotate", response_model=DocumentItem)
 async def rotate_document(doc_id: str, req: RotateRequest):
     doc = doc_repo.get_by_id(doc_id)

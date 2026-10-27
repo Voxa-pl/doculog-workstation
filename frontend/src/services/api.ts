@@ -45,6 +45,11 @@ export const documentApi = {
     return res.data;
   },
 
+  resetAllDocuments: async (): Promise<{ mesaj: string; sifirlanan_adet: number }> => {
+    const res = await api.post('/documents/reset-all');
+    return res.data;
+  },
+
   loadDemoDocument: async (): Promise<DocumentItem> => {
     const res = await api.post<DocumentItem>('/demo/load');
     return res.data;
